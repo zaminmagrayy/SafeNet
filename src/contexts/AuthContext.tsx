@@ -113,7 +113,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({ 
+      // Adding emailRedirectTo option to ensure proper redirect after signup
+      const { error, data } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
@@ -121,7 +122,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             full_name: fullName,
             phone: phone || '',
             theme: theme // Save the current theme
-          }
+          },
+          emailRedirectTo: window.location.origin,
         }
       });
       
@@ -130,7 +132,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error };
       }
       
-      toast.success("Account created successfully! You may need to verify your email.");
+      // If user is created without email confirmation required, sign them in directly
+      if (data.user && !data.session) {
+        // Wait a moment before attempting to sign in to allow the database to update
+        setTimeout(async () => {
+          await signIn(email, password);
+        }, 1000);
+        toast.success("Account created successfully! Signing you in...");
+      } else if (data.session) {
+        // User is already signed in
+        toast.success("Account created successfully!");
+      }
+      
       return { error: null };
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");

@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,6 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useTheme } from "@/contexts/ThemeContext";
 
 const formSchema = z.object({
   fullName: z.string().min(2, { message: "Name must be at least 2 characters" }),
@@ -35,7 +33,6 @@ const Register = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { signUp, user } = useAuth();
   const navigate = useNavigate();
-  const { theme } = useTheme();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -99,13 +96,7 @@ const Register = () => {
         throw signUpError;
       }
       
-      // At this point, the user has been created and the auth state will update
-      toast.success("Account created successfully! Redirecting to dashboard...");
-      
-      // Navigate to the login page if not automatically redirected
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      // No need to navigate as the AuthContext will handle this automatically
       
     } catch (error: any) {
       console.error("Registration error:", error);
