@@ -62,7 +62,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Analyzing content:", contentType);
+    console.log(`Analyzing content: ${contentType}, API key available: ${GEMINI_API_KEY ? "Yes" : "No"}`);
 
     // Check if API key is available
     if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === "") {
@@ -174,6 +174,8 @@ serve(async (req) => {
         };
       }
 
+      console.log("Calling Gemini API...", apiUrl);
+      
       // Call the Gemini API
       const geminiResponse = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: "POST",
@@ -184,7 +186,8 @@ serve(async (req) => {
       });
 
       if (!geminiResponse.ok) {
-        console.error("Gemini API error:", geminiResponse.status, await geminiResponse.text());
+        const errorText = await geminiResponse.text();
+        console.error(`Gemini API error: ${geminiResponse.status}`, errorText);
         // Fallback to mock analysis on API error
         const mockResult = createMockAnalysis(content, contentType);
         return new Response(JSON.stringify(mockResult), { headers: corsHeaders });
@@ -192,8 +195,15 @@ serve(async (req) => {
 
       const geminiData = await geminiResponse.json();
       
+      if (!geminiData.candidates || !geminiData.candidates[0]?.content?.parts?.[0]?.text) {
+        console.error("Unexpected Gemini API response format:", JSON.stringify(geminiData));
+        const mockResult = createMockAnalysis(content, contentType);
+        return new Response(JSON.stringify(mockResult), { headers: corsHeaders });
+      }
+      
       // Process the response
       const aiResponse = geminiData.candidates[0].content.parts[0].text;
+      console.log("Gemini API response received:", aiResponse.substring(0, 100) + "...");
       
       // Parse the AI response to determine if content is safe
       const isSafe = !aiResponse.toLowerCase().includes("unsafe") &&
@@ -221,6 +231,7 @@ serve(async (req) => {
         aiResponse: aiResponse,
       };
 
+      console.log("Analysis complete, returning result");
       return new Response(
         JSON.stringify(analysisResult),
         { headers: corsHeaders }
