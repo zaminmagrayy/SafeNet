@@ -80,7 +80,6 @@ const ReportsPage = () => {
   const [filter, setFilter] = useState<'all' | 'flagged' | 'safe'>('all');
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const { user } = useAuth();
@@ -162,11 +161,47 @@ const ReportsPage = () => {
         throw error;
       }
       
-      setReports(reports.filter(report => report.id !== reportId));
+      // Remove report from local state to reflect deletion
+      setReports(prevReports => prevReports.filter(report => report.id !== reportId));
       toast.success("Report deleted successfully");
     } catch (error) {
       console.error('Error deleting report:', error);
       toast.error('Failed to delete report');
+    }
+  };
+
+  // Add flagged account to database
+  const handleFlagAccount = async (report: Report) => {
+    // Check if the report has already been flagged
+    if (report.status === 'flagged') {
+      try {
+        // Use report's information to create a flagged account entry
+        const newFlaggedAccount = {
+          user_id: user?.id || '',
+          username: report.user.split('@')[0], // Extract username from email
+          email: report.user,
+          violations: 1,
+          last_violation: new Date().toISOString(),
+          status: 'active',
+          violation_type: report.aiAnalysis?.category || 'policy_violation',
+        };
+
+        // Insert the flagged account into Supabase
+        const { error } = await supabase
+          .from('flagged_accounts')
+          .insert([newFlaggedAccount]);
+
+        if (error) {
+          throw error;
+        }
+
+        toast.success('Account has been flagged and added to the flagged accounts list');
+      } catch (error) {
+        console.error('Error flagging account:', error);
+        toast.error('Failed to flag account');
+      }
+    } else {
+      toast.info('Only flagged content can result in account flagging');
     }
   };
   
@@ -269,18 +304,7 @@ const ReportsPage = () => {
                     
                     <Separator className="my-4" />
                     
-                    <div className="flex space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          setSelectedReport(report);
-                          setIsDownloadOpen(true);
-                        }}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Report
-                      </Button>
+                    <div className="flex flex-wrap space-x-2">
                       <Button 
                         variant="outline" 
                         size="sm"
@@ -289,6 +313,17 @@ const ReportsPage = () => {
                         <Eye className="mr-2 h-4 w-4" />
                         View Details
                       </Button>
+                      {report.status === 'flagged' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
+                          onClick={() => handleFlagAccount(report)}
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Flag Account
+                        </Button>
+                      )}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button 
@@ -335,13 +370,6 @@ const ReportsPage = () => {
           </div>
         )}
       </div>
-      
-      {selectedReport && (
-        <ReportDownload
-          reportData={selectedReport}
-          filename={`report-${selectedReport.id}`}
-        />
-      )}
 
       {/* Details Dialog */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
@@ -427,21 +455,12 @@ const ReportsPage = () => {
 
           <DialogFooter className="flex space-x-2">
             <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
-            <Button 
-              variant="default" 
-              onClick={() => {
-                if (selectedReport) {
-                  const reportJson = new Blob([JSON.stringify(selectedReport, null, 2)], { type: 'application/json' });
-                  const link = document.createElement('a');
-                  link.href = URL.createObjectURL(reportJson);
-                  link.download = `report-${selectedReport.id}.json`;
-                  link.click();
-                  toast.success("Report downloaded successfully");
-                }
-              }}
-            >
-              <Download className="mr-2 h-4 w-4" /> Download Report
-            </Button>
+            {selectedReport && (
+              <ReportDownload
+                reportData={selectedReport}
+                filename={`report-${selectedReport.id}`}
+              />
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
