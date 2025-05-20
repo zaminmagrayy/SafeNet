@@ -69,7 +69,13 @@ const UploadPage = () => {
       return data;
     } catch (err) {
       console.error('Error in analyzeContent:', err);
-      throw err;
+      // Return a default analysis for error cases
+      return {
+        safe: false,
+        reason: "Unable to analyze content - service unavailable",
+        category: "error",
+        confidence: 0.5
+      };
     }
   };
 
@@ -141,7 +147,7 @@ const UploadPage = () => {
             : 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop';
       }
       
-      // Create report object
+      // Create report object that matches the Report type
       const report = {
         id: reportId,
         thumbnail: thumbnailUrl,
