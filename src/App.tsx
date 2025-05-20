@@ -50,25 +50,19 @@ const AnimatedRoutes = () => {
   );
 };
 
-const AuthenticatedApp = () => {
-  return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AnimatedRoutes />
-      </AuthProvider>
-    </ThemeProvider>
-  );
-};
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthenticatedApp />
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <AnimatedRoutes />
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
