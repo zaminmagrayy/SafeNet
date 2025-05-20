@@ -38,7 +38,8 @@ import {
   Ban,
   UserX,
   ShieldAlert,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
@@ -71,10 +72,12 @@ const FlaggedPage = () => {
         .order('last_violation', { ascending: false });
       
       if (error) {
+        console.error('Error fetching flagged accounts:', error);
         throw error;
       }
       
       if (data) {
+        console.log("Fetched flagged accounts:", data);
         // Transform database data to FlaggedAccount type
         const transformedAccounts: FlaggedAccount[] = data.map((account: any) => ({
           id: account.id,
@@ -200,6 +203,11 @@ const FlaggedPage = () => {
     }
   };
 
+  const handleRefresh = () => {
+    fetchFlaggedAccounts();
+    toast.info("Refreshing flagged accounts list...");
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -211,7 +219,19 @@ const FlaggedPage = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold dark:text-white">Flagged Accounts</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold dark:text-white">Flagged Accounts</h1>
+        
+        <Button 
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
+      </div>
       
       <Card>
         <CardHeader>

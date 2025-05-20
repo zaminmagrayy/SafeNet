@@ -186,12 +186,15 @@ const ReportsPage = () => {
           violation_type: report.aiAnalysis?.category || 'policy_violation',
         };
 
+        console.log("Flagging account with data:", newFlaggedAccount);
+
         // Insert the flagged account into Supabase
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('flagged_accounts')
           .insert([newFlaggedAccount]);
 
         if (error) {
+          console.error("Supabase error details:", error);
           throw error;
         }
 
