@@ -14,8 +14,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Upload as UploadIcon, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from "@/integrations/supabase/client";
 
 type ContentType = 'video' | 'image' | 'text';
 type AnalysisResult = 'safe' | 'flagged';
@@ -29,6 +30,7 @@ const UploadPage = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [analysisDetails, setAnalysisDetails] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -45,6 +47,29 @@ const UploadPage = () => {
       } else if (selectedFile.type === 'text/plain' || selectedFile.type === 'application/json') {
         setContentType('text');
       }
+    }
+  };
+
+  // Function to analyze content using Gemini API via Supabase Edge Function
+  const analyzeContent = async (contentToAnalyze: string, type: ContentType) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-content', {
+        body: { 
+          content: contentToAnalyze,
+          contentType: type
+        }
+      });
+
+      if (error) {
+        console.error('Error calling analyze-content function:', error);
+        throw new Error('Failed to analyze content');
+      }
+
+      console.log('Analysis response:', data);
+      return data;
+    } catch (err) {
+      console.error('Error in analyzeContent:', err);
+      throw err;
     }
   };
 
@@ -65,12 +90,32 @@ const UploadPage = () => {
       setIsUploading(false);
       setIsAnalyzing(true);
       
-      // Simulate AI analysis
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Extract content for analysis
+      let contentToAnalyze = caption;
+      if (!contentToAnalyze) {
+        contentToAnalyze = url || file?.name || 'Sample content for analysis';
+        
+        // If it's a text file, try to read its content
+        if (file && contentType === 'text') {
+          try {
+            const text = await file.text();
+            contentToAnalyze = text.substring(0, 5000); // Limit to 5000 chars
+          } catch (error) {
+            console.error('Error reading text file:', error);
+          }
+        }
+      }
       
-      // Randomly determine if content is safe or flagged (for demo purposes)
-      const analysisResult: AnalysisResult = Math.random() > 0.5 ? 'safe' : 'flagged';
-      setResult(analysisResult);
+      // Analyze content using Gemini API
+      const analysisResult = await analyzeContent(contentToAnalyze, contentType);
+      
+      // Store analysis details
+      setAnalysisDetails(analysisResult);
+      
+      // Determine result based on analysis
+      const isSafe = analysisResult.safe === true;
+      const finalResult: AnalysisResult = isSafe ? 'safe' : 'flagged';
+      setResult(finalResult);
       setIsAnalyzing(false);
       
       // Generate a unique ID for the report
@@ -102,8 +147,13 @@ const UploadPage = () => {
         thumbnail: thumbnailUrl,
         contentType,
         uploadTime: new Date().toISOString(),
-        status: analysisResult,
+        status: finalResult,
         user: 'current.user@example.com', // This would be the actual logged-in user
+        aiAnalysis: {
+          reason: analysisResult.reason || 'No specific reason provided',
+          category: analysisResult.category || 'unknown',
+          confidence: analysisResult.confidence || 0.5
+        }
       };
       
       // Add the report to the reports list using the exposed method from Reports component
@@ -112,14 +162,15 @@ const UploadPage = () => {
       }
       
       // If content is flagged, also add to flagged accounts list
-      if (analysisResult === 'flagged') {
+      if (finalResult === 'flagged') {
         const flaggedAccount = {
           id: 'usr-' + Date.now().toString().substring(6),
           username: 'current_user',
           email: 'current.user@example.com',
           violations: 1,
           lastViolation: new Date().toISOString(),
-          status: 'active' as const
+          status: 'active' as const,
+          violationType: analysisResult.category || 'policy_violation'
         };
         
         if (typeof (window as any).addFlaggedAccount === 'function') {
@@ -128,7 +179,7 @@ const UploadPage = () => {
       }
       
       // Navigate to reports page after a delay to see the new report
-      if (analysisResult === 'flagged') {
+      if (finalResult === 'flagged') {
         setTimeout(() => {
           navigate('/dashboard/reports');
         }, 2000);
@@ -149,6 +200,7 @@ const UploadPage = () => {
     setContentType('video');
     setFile(null);
     setResult(null);
+    setAnalysisDetails(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -215,7 +267,7 @@ const UploadPage = () => {
                     className="cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="h-10 w-10 mx-auto text-gray-400" />
+                    <UploadIcon className="h-10 w-10 mx-auto text-gray-400" />
                     <p className="mt-2 text-sm font-medium dark:text-gray-300">Click to upload media</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Supports: MP4, JPG, PNG, GIF, TXT, JSON
@@ -284,7 +336,19 @@ const UploadPage = () => {
               type="submit"
               disabled={(!url && !file) || isUploading || isAnalyzing}
             >
-              {isUploading ? 'Uploading...' : isAnalyzing ? 'Analyzing...' : 'Analyze Content'}
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : isAnalyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                'Analyze Content'
+              )}
             </Button>
           </CardFooter>
         </form>
@@ -316,7 +380,7 @@ const UploadPage = () => {
                 : 'This content may violate our community guidelines.'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-4">
+          <CardContent className="pt-4 space-y-4">
             {result === 'safe' ? (
               <p className="text-gray-700 dark:text-gray-300">
                 Our AI analysis indicates that your content is safe for our platform.
@@ -326,8 +390,17 @@ const UploadPage = () => {
               <div className="space-y-4">
                 <p className="text-gray-700 dark:text-gray-300">
                   Our AI analysis has detected potential policy violations in your content.
-                  Please review the details in the Moderation Reports section.
                 </p>
+                {analysisDetails && (
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-200 mb-2">Analysis Details:</h3>
+                    <ul className="space-y-1 text-sm">
+                      <li><span className="font-medium">Reason:</span> {analysisDetails.reason}</li>
+                      <li><span className="font-medium">Category:</span> {analysisDetails.category}</li>
+                      <li><span className="font-medium">Confidence:</span> {(analysisDetails.confidence * 100).toFixed(2)}%</li>
+                    </ul>
+                  </div>
+                )}
                 <Button 
                   variant="outline" 
                   onClick={() => navigate('/dashboard/reports')}
