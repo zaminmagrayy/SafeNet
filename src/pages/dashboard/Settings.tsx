@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,8 +23,28 @@ const Settings = () => {
   const [autoAnalysis, setAutoAnalysis] = useState(true);
   const [twoFactorAuth, setTwoFactorAuth] = useState(false);
   
+  // On mount, detect current theme from document
+  useEffect(() => {
+    if (document.documentElement.classList.contains('dark')) {
+      setTheme('dark');
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('system');
+    } else {
+      setTheme('light');
+    }
+  }, []);
+  
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
+    
+    // Apply theme changes
+    if (newTheme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.classList.toggle('dark', systemTheme === 'dark');
+    } else {
+      document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    }
+    
     toast.success(`Theme changed to ${newTheme} mode`);
   };
   
@@ -49,7 +69,7 @@ const Settings = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold mb-6 dark:text-gray-100">Settings</h1>
       
       <Tabs defaultValue="appearance" className="space-y-6">
         <TabsList className="grid grid-cols-4 w-full max-w-md">
@@ -97,7 +117,7 @@ const Settings = () => {
                     <span>System</span>
                   </Button>
                 </div>
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                   Select a theme preference for the dashboard interface.
                 </p>
               </div>
@@ -193,7 +213,7 @@ const Settings = () => {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="twoFactorAuth">Enable Two-Factor Authentication</Label>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Receive a code via email whenever you sign in.
                   </p>
                 </div>
@@ -220,7 +240,7 @@ const Settings = () => {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="emailNotifications">Email Notifications</Label>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Receive email notifications for flagged content.
                   </p>
                 </div>
@@ -234,7 +254,7 @@ const Settings = () => {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="autoAnalysis">Automatic Analysis</Label>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Automatically analyze content when uploaded.
                   </p>
                 </div>

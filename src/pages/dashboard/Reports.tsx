@@ -3,9 +3,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, FileVideo, Image, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Search, FileVideo, Image, AlertCircle, CheckCircle2, Clock, Trash2, Download } from "lucide-react";
+import { toast } from "sonner";
 
 type Report = {
   id: string;
@@ -22,56 +23,15 @@ type DetailedReport = Report & {
   summary: string;
 };
 
-const mockReports: Report[] = [
-  {
-    id: "rep-001",
-    thumbnail: "https://images.unsplash.com/photo-1649972904349-6e44c42644a7?w=500&h=350&fit=crop",
-    contentType: "video",
-    uploadTime: "2023-05-18T14:22:30Z",
-    status: "flagged",
-    user: "john.doe@example.com",
-  },
-  {
-    id: "rep-002",
-    thumbnail: "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=500&h=350&fit=crop",
-    contentType: "image",
-    uploadTime: "2023-05-18T10:15:00Z",
-    status: "safe",
-    user: "jane.smith@example.com",
-  },
-  {
-    id: "rep-003",
-    thumbnail: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
-    contentType: "video",
-    uploadTime: "2023-05-17T18:05:45Z",
-    status: "flagged",
-    user: "robert.johnson@example.com",
-  },
-  {
-    id: "rep-004",
-    thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop",
-    contentType: "image",
-    uploadTime: "2023-05-17T09:30:12Z",
-    status: "safe",
-    user: "emily.davis@example.com",
-  },
-  {
-    id: "rep-005",
-    thumbnail: "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?w=500&h=350&fit=crop",
-    contentType: "text",
-    uploadTime: "2023-05-16T16:42:20Z",
-    status: "flagged",
-    user: "michael.wilson@example.com",
-  },
-];
-
 const Reports = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<DetailedReport | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   
   const handleViewReport = (report: Report) => {
-    // Mock additional details when viewing a report
+    // Add detailed report information
     const detailedReport: DetailedReport = {
       ...report,
       category: report.status === "flagged" ? ["Violent Language", "Threatening Gestures", "Visual Violence"][Math.floor(Math.random() * 3)] : undefined,
@@ -84,8 +44,43 @@ const Reports = () => {
     setSelectedReport(detailedReport);
     setShowDetail(true);
   };
+
+  const handleDeleteReport = (id: string) => {
+    setReports(reports.filter(report => report.id !== id));
+    toast.success("Report deleted successfully");
+    setConfirmDelete(null);
+  };
+
+  const handleDownloadReport = (report: Report) => {
+    // Create detailed report for download
+    const detailedReport = {
+      ...report,
+      category: report.status === "flagged" ? ["Violent Language", "Threatening Gestures", "Visual Violence"][Math.floor(Math.random() * 3)] : undefined,
+      confidence: parseFloat((0.7 + Math.random() * 0.25).toFixed(2)),
+      summary: report.status === "flagged" 
+        ? "This content contains elements that violate our community guidelines. The AI analysis identified potential violent or threatening content that may be harmful to viewers."
+        : "This content was analyzed and found to comply with our community guidelines. No harmful elements were detected in the material."
+    };
+
+    // Convert to JSON and create download
+    const reportString = JSON.stringify(detailedReport, null, 2);
+    const blob = new Blob([reportString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report-${report.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success('Report downloaded successfully');
+  };
   
-  const filteredReports = mockReports.filter(report => 
+  const filteredReports = reports.filter(report => 
     report.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
     report.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -101,10 +96,24 @@ const Reports = () => {
     }).format(date);
   };
 
+  // Method to add a new report (will be called from Upload page)
+  const addReport = (report: Report) => {
+    setReports(prevReports => [report, ...prevReports]);
+  };
+
+  // Expose the addReport method to window so it can be called from other components
+  // This is a workaround until we implement proper state management
+  useEffect(() => {
+    (window as any).addReportToList = addReport;
+    return () => {
+      delete (window as any).addReportToList;
+    };
+  }, []);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Moderation Reports</h1>
+        <h1 className="text-2xl font-bold dark:text-white">Moderation Reports</h1>
         
         <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -122,32 +131,32 @@ const Reports = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-4">Content</th>
-                  <th className="text-left p-4">Type</th>
-                  <th className="text-left p-4">User</th>
-                  <th className="text-left p-4">Upload Time</th>
-                  <th className="text-left p-4">Status</th>
-                  <th className="text-right p-4">Action</th>
+                <tr className="border-b dark:border-gray-700">
+                  <th className="text-left p-4 dark:text-gray-300">Content</th>
+                  <th className="text-left p-4 dark:text-gray-300">Type</th>
+                  <th className="text-left p-4 dark:text-gray-300">User</th>
+                  <th className="text-left p-4 dark:text-gray-300">Upload Time</th>
+                  <th className="text-left p-4 dark:text-gray-300">Status</th>
+                  <th className="text-right p-4 dark:text-gray-300">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredReports.length > 0 ? (
                   filteredReports.map((report) => (
-                    <tr key={report.id} className="border-b hover:bg-gray-50">
+                    <tr key={report.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="relative w-12 h-12 rounded overflow-hidden bg-gray-100">
+                          <div className="relative w-12 h-12 rounded overflow-hidden bg-gray-100 dark:bg-gray-700">
                             <img
                               src={report.thumbnail}
                               alt="Content thumbnail"
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <span className="text-sm font-medium">{report.id}</span>
+                          <span className="text-sm font-medium dark:text-gray-300">{report.id}</span>
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 dark:text-gray-300">
                         <div className="flex items-center gap-2">
                           {report.contentType === "video" ? (
                             <FileVideo className="h-4 w-4 text-blue-500" />
@@ -159,8 +168,8 @@ const Reports = () => {
                           <span className="capitalize">{report.contentType}</span>
                         </div>
                       </td>
-                      <td className="p-4 text-sm">{report.user}</td>
-                      <td className="p-4 text-sm">
+                      <td className="p-4 text-sm dark:text-gray-300">{report.user}</td>
+                      <td className="p-4 text-sm dark:text-gray-300">
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-gray-400" />
                           {formatDate(report.uploadTime)}
@@ -180,20 +189,37 @@ const Reports = () => {
                         </Badge>
                       </td>
                       <td className="p-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewReport(report)}
-                        >
-                          View Report
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewReport(report)}
+                          >
+                            View
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDownloadReport(report)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                            onClick={() => setConfirmDelete(report.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-gray-500">
-                      No reports found matching your search
+                    <td colSpan={6} className="p-4 text-center text-gray-500 dark:text-gray-400">
+                      No reports found. Upload content to generate reports.
                     </td>
                   </tr>
                 )}
@@ -216,7 +242,7 @@ const Reports = () => {
           {selectedReport && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-1">
-                <div className="rounded-lg overflow-hidden bg-gray-100">
+                <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
                   <img
                     src={selectedReport.thumbnail}
                     alt="Content preview"
@@ -226,18 +252,18 @@ const Reports = () => {
                 
                 <div className="mt-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Content Type:</span>
-                    <span className="font-medium capitalize">{selectedReport.contentType}</span>
+                    <span className="text-gray-500 dark:text-gray-400">Content Type:</span>
+                    <span className="font-medium dark:text-gray-300 capitalize">{selectedReport.contentType}</span>
                   </div>
                   
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Uploaded By:</span>
-                    <span className="font-medium">{selectedReport.user}</span>
+                    <span className="text-gray-500 dark:text-gray-400">Uploaded By:</span>
+                    <span className="font-medium dark:text-gray-300">{selectedReport.user}</span>
                   </div>
                   
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Upload Time:</span>
-                    <span className="font-medium">{formatDate(selectedReport.uploadTime)}</span>
+                    <span className="text-gray-500 dark:text-gray-400">Upload Time:</span>
+                    <span className="font-medium dark:text-gray-300">{formatDate(selectedReport.uploadTime)}</span>
                   </div>
                 </div>
               </div>
@@ -245,14 +271,14 @@ const Reports = () => {
               <div className="md:col-span-2">
                 <div className={`mb-4 p-3 rounded-lg ${
                   selectedReport.status === "safe" 
-                    ? "bg-green-50 text-green-800" 
-                    : "bg-red-50 text-red-800"
+                    ? "bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300" 
+                    : "bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                 }`}>
                   <div className="flex items-center gap-2">
                     {selectedReport.status === "safe" ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
                     ) : (
-                      <AlertCircle className="h-5 w-5 text-red-600" />
+                      <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
                     )}
                     <span className="font-medium">
                       {selectedReport.status === "safe" 
@@ -263,13 +289,13 @@ const Reports = () => {
                 </div>
                 
                 <div className="mb-4">
-                  <h4 className="text-sm font-medium mb-2">AI Analysis Summary:</h4>
-                  <p className="text-sm text-gray-600">{selectedReport.summary}</p>
+                  <h4 className="text-sm font-medium mb-2 dark:text-gray-300">AI Analysis Summary:</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{selectedReport.summary}</p>
                 </div>
                 
                 <div className="mb-4">
-                  <h4 className="text-sm font-medium mb-2">Confidence Score:</h4>
-                  <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
+                  <h4 className="text-sm font-medium mb-2 dark:text-gray-300">Confidence Score:</h4>
+                  <div className="bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
                     <div 
                       className={`h-full ${
                         selectedReport.status === "safe" 
@@ -279,13 +305,13 @@ const Reports = () => {
                       style={{ width: `${selectedReport.confidence * 100}%` }}
                     ></div>
                   </div>
-                  <p className="text-xs text-right mt-1">{selectedReport.confidence * 100}%</p>
+                  <p className="text-xs text-right mt-1 dark:text-gray-400">{selectedReport.confidence * 100}%</p>
                 </div>
                 
                 {selectedReport.status === "flagged" && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium mb-2">Violation Details:</h4>
-                    <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
+                    <h4 className="text-sm font-medium mb-2 dark:text-gray-300">Violation Details:</h4>
+                    <ul className="list-disc pl-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
                       <li>Type: {selectedReport.category}</li>
                       <li>Severity: {selectedReport.confidence > 0.85 ? "High" : "Medium"}</li>
                       <li>Timestamp: {formatDate(selectedReport.uploadTime)}</li>
@@ -299,6 +325,12 @@ const Reports = () => {
                     onClick={() => setShowDetail(false)}
                   >
                     Close
+                  </Button>
+                  <Button
+                    onClick={() => handleDownloadReport(selectedReport)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Report
                   </Button>
                   {selectedReport.status === "flagged" && (
                     <Button
@@ -315,6 +347,26 @@ const Reports = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this report? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => confirmDelete && handleDeleteReport(confirmDelete)}>
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

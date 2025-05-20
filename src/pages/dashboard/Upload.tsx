@@ -1,35 +1,50 @@
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { FileVideo, Image, Upload as UploadIcon, AlertCircle, CheckCircle2 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import React, { useState, useRef } from 'react';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { toast } from 'sonner';
+import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-const apiKey = "AIzaSyAh77KVUKjbH5KO3zwwjSzMwavpyWD7HXg"; // Gemini API Key
+type ContentType = 'video' | 'image' | 'text';
+type AnalysisResult = 'safe' | 'flagged';
 
-type ModerationResult = {
-  status: "safe" | "flagged";
-  category?: string;
-  confidence: number;
-  summary: string;
-};
-
-const Upload = () => {
-  const [url, setUrl] = useState("");
-  const [caption, setCaption] = useState("");
-  const [hashtags, setHashtags] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+const UploadPage = () => {
+  const [url, setUrl] = useState('');
+  const [caption, setCaption] = useState('');
+  const [hashtags, setHashtags] = useState('');
+  const [contentType, setContentType] = useState<ContentType>('video');
+  const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showResult, setShowResult] = useState(false);
-  const [result, setResult] = useState<ModerationResult | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      
+      // Set content type based on file type
+      if (selectedFile.type.startsWith('image/')) {
+        setContentType('image');
+      } else if (selectedFile.type.startsWith('video/')) {
+        setContentType('video');
+      } else if (selectedFile.type === 'text/plain' || selectedFile.type === 'application/json') {
+        setContentType('text');
+      }
     }
   };
 
@@ -37,70 +52,122 @@ const Upload = () => {
     e.preventDefault();
     
     if (!url && !file) {
-      toast.error("Please provide a URL or upload a file");
+      toast.error('Please provide a URL or upload a file');
       return;
     }
     
-    setIsAnalyzing(true);
+    setIsUploading(true);
     
     try {
-      // Simulating Gemini API call
+      // Simulate upload
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      toast.success('Content uploaded successfully');
+      setIsUploading(false);
+      setIsAnalyzing(true);
+      
+      // Simulate AI analysis
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // For demo purposes, randomly determine if content is safe or flagged
-      const isSafe = Math.random() > 0.3;
+      // Randomly determine if content is safe or flagged (for demo purposes)
+      const analysisResult: AnalysisResult = Math.random() > 0.5 ? 'safe' : 'flagged';
+      setResult(analysisResult);
+      setIsAnalyzing(false);
       
-      const mockResult: ModerationResult = isSafe 
-        ? {
-            status: "safe",
-            confidence: parseFloat((0.8 + Math.random() * 0.15).toFixed(2)),
-            summary: "No harmful content detected. The content appears to be safe for all audiences."
-          }
-        : {
-            status: "flagged",
-            category: ["Violent Language", "Threatening Gestures", "Visual Violence"][Math.floor(Math.random() * 3)],
-            confidence: parseFloat((0.7 + Math.random() * 0.2).toFixed(2)),
-            summary: "Potentially harmful content detected. The material contains elements that may be considered violent or threatening."
-          };
+      // Generate a unique ID for the report
+      const reportId = 'rep-' + Date.now().toString().substring(6);
       
-      setResult(mockResult);
-      setShowResult(true);
-      
-      if (mockResult.status === "safe") {
-        toast.success("Analysis complete. Content is safe.");
+      // Create a thumbnail URL based on content type
+      let thumbnailUrl = '';
+      if (file) {
+        if (contentType === 'image') {
+          thumbnailUrl = URL.createObjectURL(file);
+        } else {
+          // Use placeholder images for video and text
+          thumbnailUrl = contentType === 'video' 
+            ? 'https://images.unsplash.com/photo-1649972904349-6e44c42644a7?w=500&h=350&fit=crop'
+            : 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop';
+        }
       } else {
-        toast.error("Analysis complete. Content has been flagged.");
+        // Use placeholder images based on content type
+        thumbnailUrl = contentType === 'video' 
+          ? 'https://images.unsplash.com/photo-1649972904349-6e44c42644a7?w=500&h=350&fit=crop'
+          : contentType === 'image'
+            ? 'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=500&h=350&fit=crop'
+            : 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop';
       }
+      
+      // Create report object
+      const report = {
+        id: reportId,
+        thumbnail: thumbnailUrl,
+        contentType,
+        uploadTime: new Date().toISOString(),
+        status: analysisResult,
+        user: 'current.user@example.com', // This would be the actual logged-in user
+      };
+      
+      // Add the report to the reports list using the exposed method from Reports component
+      if (typeof (window as any).addReportToList === 'function') {
+        (window as any).addReportToList(report);
+      }
+      
+      // If content is flagged, also add to flagged accounts list
+      if (analysisResult === 'flagged') {
+        const flaggedAccount = {
+          id: 'usr-' + Date.now().toString().substring(6),
+          username: 'current_user',
+          email: 'current.user@example.com',
+          violations: 1,
+          lastViolation: new Date().toISOString(),
+          status: 'active' as const
+        };
+        
+        if (typeof (window as any).addFlaggedAccount === 'function') {
+          (window as any).addFlaggedAccount(flaggedAccount);
+        }
+      }
+      
+      // Navigate to reports page after a delay to see the new report
+      if (analysisResult === 'flagged') {
+        setTimeout(() => {
+          navigate('/dashboard/reports');
+        }, 2000);
+      }
+      
     } catch (error) {
-      toast.error("An error occurred during analysis");
-      console.error(error);
-    } finally {
+      console.error('Error during upload or analysis:', error);
+      toast.error('There was an error processing your request');
+      setIsUploading(false);
       setIsAnalyzing(false);
     }
   };
 
   const handleReset = () => {
-    setUrl("");
-    setCaption("");
-    setHashtags("");
+    setUrl('');
+    setCaption('');
+    setHashtags('');
+    setContentType('video');
     setFile(null);
     setResult(null);
-    setShowResult(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Upload Content for Moderation</h1>
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6 dark:text-white">Upload Content</h1>
       
-      <Card>
+      <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Content Analysis</CardTitle>
+          <CardTitle>Submit Content for AI Analysis</CardTitle>
           <CardDescription>
-            Upload or provide a URL to content you want to analyze for safety.
+            Upload media content or provide a URL to analyze for policy violations
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+        
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="url">Content URL</Label>
               <Input
@@ -108,38 +175,51 @@ const Upload = () => {
                 placeholder="https://example.com/video.mp4"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+                disabled={!!file || isUploading || isAnalyzing}
               />
-              <p className="text-sm text-gray-500">Or</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Enter URL from YouTube, Instagram, or Facebook</p>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="file">Upload File</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center">
-                <div className="flex space-x-2 mb-4">
-                  <FileVideo className="h-6 w-6 text-gray-400" />
-                  <Image className="h-6 w-6 text-gray-400" />
-                </div>
-                <p className="text-sm text-gray-500 mb-2">
-                  Drag and drop your file here or click to browse
-                </p>
+              <Label>Or Upload File</Label>
+              <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center">
                 <Input
+                  ref={fileInputRef}
                   id="file"
                   type="file"
-                  accept="image/*,video/*"
                   className="hidden"
                   onChange={handleFileChange}
+                  accept="image/*,video/*,.txt,.json"
+                  disabled={!!url || isUploading || isAnalyzing}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => document.getElementById("file")?.click()}
-                >
-                  Select File
-                </Button>
-                {file && (
-                  <div className="mt-4 flex items-center gap-2 text-sm">
-                    <span>Selected:</span>
-                    <span className="font-medium">{file.name}</span>
+                
+                {file ? (
+                  <div>
+                    <p className="font-medium dark:text-gray-300">{file.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{(file.size / 1024).toFixed(2)} KB</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="mt-2"
+                      disabled={isUploading || isAnalyzing}
+                    >
+                      Remove File
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-10 w-10 mx-auto text-gray-400" />
+                    <p className="mt-2 text-sm font-medium dark:text-gray-300">Click to upload media</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Supports: MP4, JPG, PNG, GIF, TXT, JSON
+                    </p>
                   </div>
                 )}
               </div>
@@ -149,9 +229,10 @@ const Upload = () => {
               <Label htmlFor="caption">Caption (Optional)</Label>
               <Textarea
                 id="caption"
-                placeholder="Enter caption for your content..."
+                placeholder="Add a caption for your content"
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
+                disabled={isUploading || isAnalyzing}
               />
             </div>
             
@@ -159,95 +240,107 @@ const Upload = () => {
               <Label htmlFor="hashtags">Hashtags (Optional)</Label>
               <Input
                 id="hashtags"
-                placeholder="#safecontent #example"
+                placeholder="#safe #appropriate #content"
                 value={hashtags}
                 onChange={(e) => setHashtags(e.target.value)}
+                disabled={isUploading || isAnalyzing}
               />
             </div>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button variant="outline" onClick={handleReset}>Reset</Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={isAnalyzing}
-            className="bg-purple-600 hover:bg-purple-700"
-          >
-            {isAnalyzing ? (
-              <>Analyzing...</>
-            ) : (
-              <>
-                <UploadIcon className="mr-2 h-4 w-4" /> Analyze Content
-              </>
-            )}
-          </Button>
-        </CardFooter>
+            
+            <div className="space-y-2">
+              <Label>Content Type</Label>
+              <RadioGroup
+                value={contentType}
+                onValueChange={(value) => setContentType(value as ContentType)}
+                className="flex gap-4"
+                disabled={isUploading || isAnalyzing}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="video" id="video" />
+                  <Label htmlFor="video">Video</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="image" id="image" />
+                  <Label htmlFor="image">Image</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="text" id="text" />
+                  <Label htmlFor="text">Text</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </CardContent>
+          
+          <CardFooter className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              disabled={isUploading || isAnalyzing}
+              type="button"
+            >
+              Reset
+            </Button>
+            <Button
+              type="submit"
+              disabled={(!url && !file) || isUploading || isAnalyzing}
+            >
+              {isUploading ? 'Uploading...' : isAnalyzing ? 'Analyzing...' : 'Analyze Content'}
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
       
-      {/* Results Dialog */}
-      <Dialog open={showResult} onOpenChange={setShowResult}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Content Analysis Result</DialogTitle>
-            <DialogDescription>
-              Our AI has analyzed your content for potential violations.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {result && (
-            <div className="space-y-4">
-              <div className={`flex items-center gap-2 p-3 rounded-lg ${
-                result.status === "safe" 
-                  ? "bg-green-50 text-green-800" 
-                  : "bg-red-50 text-red-800"
-              }`}>
-                {result.status === "safe" ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                )}
-                <span className="font-medium">
-                  {result.status === "safe" 
-                    ? "Content is safe" 
-                    : `Content flagged: ${result.category}`}
-                </span>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium mb-1">Summary:</h4>
-                <p className="text-sm text-gray-600">{result.summary}</p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium mb-1">Confidence Score:</h4>
-                <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full ${
-                      result.status === "safe" 
-                        ? "bg-green-500" 
-                        : "bg-red-500"
-                    }`}
-                    style={{ width: `${result.confidence * 100}%` }}
-                  ></div>
-                </div>
-                <p className="text-xs text-right mt-1">{result.confidence * 100}%</p>
-              </div>
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button onClick={() => setShowResult(false)}>Close</Button>
+      {result && (
+        <Card className={result === 'safe' ? 'border-green-500' : 'border-red-500'}>
+          <CardHeader className={result === 'safe' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-red-50 dark:bg-red-900/30'}>
+            <CardTitle className="flex items-center gap-2">
+              {result === 'safe' ? (
+                <>
+                  <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <span className={result === 'safe' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>
+                    Content Approved
+                  </span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  <span className="text-red-700 dark:text-red-300">
+                    Content Flagged
+                  </span>
+                </>
+              )}
+            </CardTitle>
+            <CardDescription className={result === 'safe' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+              {result === 'safe' 
+                ? 'This content meets our community guidelines.' 
+                : 'This content may violate our community guidelines.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {result === 'safe' ? (
+              <p className="text-gray-700 dark:text-gray-300">
+                Our AI analysis indicates that your content is safe for our platform.
+                The content has been processed and can now be published.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-gray-700 dark:text-gray-300">
+                  Our AI analysis has detected potential policy violations in your content.
+                  Please review the details in the Moderation Reports section.
+                </p>
                 <Button 
-                  variant="outline"
-                  onClick={handleReset}
+                  variant="outline" 
+                  onClick={() => navigate('/dashboard/reports')}
                 >
-                  Test Another
+                  View Report
                 </Button>
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
 
-export default Upload;
+export default UploadPage;
