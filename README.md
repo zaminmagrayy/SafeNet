@@ -1,73 +1,61 @@
-# Welcome to your Lovable project
+Safe Net – AI-Powered Media Moderation Platform
 
-## Project info
+Safe Net is an intelligent, AI-driven web application designed to detect and prevent the spread of violent speech, threatening gestures, or graphic content across popular media platforms such as YouTube, Instagram, and Facebook. It ensures harmful content is flagged and blocked before it reaches the public.
 
-**URL**: https://lovable.dev/projects/31b020f8-4a61-4de4-b944-831496037a80
+Key Features
 
-## How can I edit this code?
+Real-time Content Moderation using Gemini 1.5 Flash API
 
-There are several ways of editing your application.
+Detects:
 
-**Use Lovable**
+Violent speech in captions or transcripts
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/31b020f8-4a61-4de4-b944-831496037a80) and start prompting.
+Threatening gestures and graphic violence in images/videos
 
-Changes made via Lovable will be committed automatically to this repo.
+Auto-Flagging System:
 
-**Use your preferred IDE**
+Red for violations
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Green for safe content
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Moderation Reports with:
 
-Follow these steps:
+Downloadable analysis (PDF/JSON)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+On-demand deletion
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Flagged Accounts Management:
 
-# Step 3: Install the necessary dependencies.
-npm i
+Track violators
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+Delete entries easily
 
-**Edit a file directly in GitHub**
+User Authentication:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Signup & Login with secure validation
 
-**Use GitHub Codespaces**
+No dummy redirection — real user accounts only
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Dynamic Theme Shifter:
 
-## What technologies are used for this project?
+Toggle between Light, Dark, and System Default
 
-This project is built with:
+Fully responsive and instantly applied across the app
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+How It Works
 
-## How can I deploy this project?
+Login / Sign Up to your Safe Net account.
 
-Simply open [Lovable](https://lovable.dev/projects/31b020f8-4a61-4de4-b944-831496037a80) and click on Share -> Publish.
+Upload content (URL or file).
 
-## Can I connect a custom domain to my Lovable project?
+AI evaluates the content using Gemini 1.5 Flash.
 
-Yes, you can!
+View the moderation results on your personalized dashboard.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Download or delete reports as needed.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Manage flagged accounts based on AI-detected violations.
+
+Gemini API Integration
+
+Powered by Gemini 1.5 Flash for both text and image/video analysis.
