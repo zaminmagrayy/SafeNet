@@ -32,7 +32,11 @@ const AnimatedRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }>
           <Route index element={<Upload />} />
           <Route path="upload" element={<Upload />} />
           <Route path="reports" element={<Reports />} />
@@ -46,17 +50,23 @@ const AnimatedRoutes = () => {
   );
 };
 
+const AuthenticatedApp = () => {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <AnimatedRoutes />
+      </AuthProvider>
+    </ThemeProvider>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <ThemeProvider>
-          <AuthProvider>
-            <AnimatedRoutes />
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthenticatedApp />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

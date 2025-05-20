@@ -4,13 +4,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useTheme } from "./ThemeContext";
+
+type UserProfile = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+};
 
 type AuthContextType = {
   user: User | null;
   session: Session | null;
+  userProfile: UserProfile | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  updateProfile: (profile: Partial<UserProfile>, avatarFile?: File | null) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   loading: boolean;
 };
 
@@ -18,9 +29,32 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { theme } = useTheme();
+
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return;
+      }
+
+      if (data) {
+        setUserProfile(data as UserProfile);
+      }
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener first
@@ -29,14 +63,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         
-        if (event === 'SIGNED_IN') {
+        if (event === 'SIGNED_IN' && session?.user) {
           // Get theme from localStorage after sign in
           setTimeout(() => {
+            fetchUserProfile(session.user.id);
             navigate('/dashboard');
           }, 0);
         } else if (event === 'SIGNED_OUT') {
+          setUserProfile(null);
           setTimeout(() => {
             navigate('/login');
+          }, 0);
+        } else if (event === 'USER_UPDATED' && session?.user) {
+          // Refresh user profile when user is updated
+          setTimeout(() => {
+            fetchUserProfile(session.user.id);
           }, 0);
         }
       }
@@ -46,6 +87,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchUserProfile(session.user.id);
+      }
+      
       setLoading(false);
     });
 
@@ -73,16 +119,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            full_name: '', // Will be updated later
+            theme: theme // Save the current theme
+          }
+        }
+      });
       
       if (error) {
-        throw error;
+        toast.error(error.message || "Failed to create account");
+        return { error };
       }
       
       toast.success("Account created successfully! You may need to verify your email.");
+      return { error: null };
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");
-      throw error;
+      return { error };
     } finally {
       setLoading(false);
     }
@@ -100,8 +157,121 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateProfile = async (profile: Partial<UserProfile>, avatarFile?: File | null) => {
+    try {
+      setLoading(true);
+      
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+      
+      // Prepare profile update
+      const updates = {
+        ...profile,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Handle avatar upload if provided
+      if (avatarFile) {
+        // Upload the file to the storage
+        const fileExt = avatarFile.name.split('.').pop();
+        const filePath = `avatars/${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase
+          .storage
+          .from('avatars')
+          .upload(filePath, avatarFile, {
+            upsert: true
+          });
+          
+        if (uploadError) {
+          throw uploadError;
+        }
+        
+        // Get the public URL
+        const { data } = supabase
+          .storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+          
+        // Add avatar URL to the updates
+        updates.avatar_url = data.publicUrl;
+      }
+      
+      // Update the profile
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+        
+      if (error) {
+        throw error;
+      }
+      
+      // Refresh the profile data
+      await fetchUserProfile(user.id);
+      
+      toast.success("Profile updated successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update profile");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      setLoading(true);
+      
+      if (!user || !user.email) {
+        throw new Error("User not authenticated");
+      }
+      
+      // First, verify the current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword
+      });
+      
+      if (signInError) {
+        toast.error("Current password is incorrect");
+        return false;
+      }
+      
+      // Then update the password
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast.success("Password updated successfully");
+      return true;
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update password");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, signIn, signUp, signOut, loading }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        session, 
+        userProfile,
+        signIn, 
+        signUp, 
+        signOut, 
+        updateProfile,
+        updatePassword,
+        loading 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
