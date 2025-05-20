@@ -1,125 +1,161 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent";
+const GEMINI_VISION_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent";
+
+interface RequestBody {
+  content: string;
+  contentType: "video" | "image" | "text";
+}
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
-    const { content, contentType } = await req.json();
-    
+    // Get the request body
+    const requestBody = await req.json() as RequestBody;
+    const { content, contentType } = requestBody;
+
     if (!content) {
       return new Response(
-        JSON.stringify({ error: 'Content is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Content is required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Analyzing ${contentType} content`);
-    
-    // Prepare the prompt based on the content type
-    const prompt = `
-      You are an AI content moderator for a social media platform. Analyze the following ${contentType} content and determine if it violates community guidelines.
-      
-      Content: ${content}
-      
-      Guidelines:
-      - No hate speech, discrimination, or harassment
-      - No violence or threats
-      - No adult content
-      - No misinformation
-      
-      Respond with a JSON object containing:
-      1. "safe": boolean (true if content is safe, false if it violates guidelines)
-      2. "reason": string (brief explanation of why the content was flagged, or "Content meets community guidelines" if safe)
-      3. "category": string (category of violation if any: "hate_speech", "violence", "adult_content", "misinformation", or "none")
-      4. "confidence": number (confidence score from 0 to 1)
-      
-      Response format example:
-      {
-        "safe": true,
-        "reason": "Content meets community guidelines",
-        "category": "none",
-        "confidence": 0.95
-      }
-    `;
+    console.log("Analyzing content:", contentType);
 
-    // Call Gemini API
-    const geminiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent", {
+    // Define the prompt based on content type
+    let prompt = "Analyze this content for potential policy violations or inappropriate material. ";
+
+    if (contentType === "image") {
+      prompt += "This is an image. Focus on visual elements that might be concerning.";
+    } else if (contentType === "video") {
+      prompt += "This is a video. Consider potential inappropriate scenes or content.";
+    } else {
+      prompt += "This is text. Look for harmful language, threats, or inappropriate content.";
+    }
+
+    // Create the request payload
+    let geminiPayload;
+    let apiUrl = GEMINI_API_URL;
+
+    if (contentType === "image") {
+      // For image analysis, we need to use gemini-pro-vision and handle base64 image
+      apiUrl = GEMINI_VISION_API_URL;
+      
+      // Handle potential URL or base64 string
+      if (content.startsWith("http")) {
+        // If it's a URL, try to fetch the image
+        try {
+          const imageResponse = await fetch(content);
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
+          }
+          const imageBuffer = await imageResponse.arrayBuffer();
+          const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+          
+          geminiPayload = {
+            contents: [{
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: "image/jpeg", // Assuming JPEG, adjust if needed
+                    data: base64Image
+                  }
+                }
+              ]
+            }]
+          };
+        } catch (error) {
+          console.error("Error fetching image:", error);
+          return new Response(
+            JSON.stringify({ error: "Failed to process image URL", details: error.message }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        // Just use the text description for now since we can't easily process uploaded files
+        // In a real implementation, you'd handle file uploads properly
+        geminiPayload = {
+          contents: [{
+            parts: [
+              { text: `${prompt} Content description: ${content}` }
+            ]
+          }]
+        };
+      }
+    } else {
+      // For text and other content types
+      geminiPayload = {
+        contents: [{
+          parts: [
+            { text: `${prompt} Content: ${content}` }
+          ]
+        }]
+      };
+    }
+
+    // Call the Gemini API
+    const geminiResponse = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": Deno.env.get("GEMINI_API_KEY") || "",
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          topP: 0.8,
-          topK: 40,
-        },
-      }),
+      body: JSON.stringify(geminiPayload),
     });
 
     if (!geminiResponse.ok) {
-      console.error("Gemini API error:", await geminiResponse.text());
-      throw new Error(`Gemini API error: ${geminiResponse.status}`);
+      const errorText = await geminiResponse.text();
+      console.error("Gemini API error:", geminiResponse.status, errorText);
+      return new Response(
+        JSON.stringify({ error: `Gemini API error: ${geminiResponse.status}` }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     const geminiData = await geminiResponse.json();
     
-    // Parse the generated text as JSON
-    try {
-      const generatedText = geminiData.candidates[0].content.parts[0].text;
-      
-      // Extract JSON object from the response
-      const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-      const analysisResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-      
-      if (!analysisResult) {
-        throw new Error("Failed to extract valid JSON from Gemini response");
+    // Process the response
+    const aiResponse = geminiData.candidates[0].content.parts[0].text;
+    
+    // Parse the AI response to determine if content is safe
+    const isSafe = !aiResponse.toLowerCase().includes("unsafe") &&
+                  !aiResponse.toLowerCase().includes("violate") &&
+                  !aiResponse.toLowerCase().includes("inappropriate");
+    
+    // Extract reason if content is not safe
+    let reason = "No specific issues found";
+    if (!isSafe) {
+      // Try to extract a reason from the AI response
+      const reasonMatch = aiResponse.match(/because (.+?)[.!?]/i);
+      if (reasonMatch) {
+        reason = reasonMatch[1].trim();
+      } else {
+        reason = "Potential policy violation detected";
       }
-      
-      console.log("Analysis result:", analysisResult);
-      
-      return new Response(
-        JSON.stringify(analysisResult),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } catch (parseError) {
-      console.error("Error parsing Gemini response:", parseError);
-      
-      // Fallback to a default response
-      return new Response(
-        JSON.stringify({
-          safe: Math.random() > 0.5, // Random fallback for demo
-          reason: "Automated content analysis completed",
-          category: Math.random() > 0.5 ? "none" : "potential_concern",
-          confidence: 0.7
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
+
+    // Create a structured analysis response
+    const analysisResult = {
+      safe: isSafe,
+      reason: isSafe ? "Content appears to be safe" : reason,
+      category: isSafe ? "safe" : "policy_violation",
+      confidence: isSafe ? 0.9 : 0.8,
+      aiResponse: aiResponse,
+    };
+
+    return new Response(
+      JSON.stringify(analysisResult),
+      { headers: { "Content-Type": "application/json" } }
+    );
+    
   } catch (error) {
     console.error("Error in analyze-content function:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "An unexpected error occurred" }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Internal server error", details: error.message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 });
