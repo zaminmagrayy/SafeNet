@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
@@ -41,8 +40,23 @@ import {
 import { toast } from 'sonner';
 import ReportDownload from '@/components/ReportDownload';
 
-// Mock data for content reports
-const INITIAL_REPORTS = [
+// Report type definition
+type Report = {
+  id: string;
+  thumbnail: string;
+  contentType: 'video' | 'image' | 'text';
+  uploadTime: string;
+  status: 'safe' | 'flagged';
+  user: string;
+  aiAnalysis: {
+    reason: string;
+    category: string;
+    confidence: number;
+  };
+};
+
+// Mock data for content reports - fixed to match Report type explicitly
+const INITIAL_REPORTS: Report[] = [
   {
     id: 'rep-123456',
     thumbnail: 'https://images.unsplash.com/photo-1649972954532-a0e5f16268ba?w=500&h=350&fit=crop',
@@ -83,21 +97,6 @@ const INITIAL_REPORTS = [
     }
   }
 ];
-
-// Report type definition
-type Report = {
-  id: string;
-  thumbnail: string;
-  contentType: 'video' | 'image' | 'text';
-  uploadTime: string;
-  status: 'safe' | 'flagged';
-  user: string;
-  aiAnalysis: {
-    reason: string;
-    category: string;
-    confidence: number;
-  };
-};
 
 const ReportsPage = () => {
   const [filter, setFilter] = useState<'all' | 'flagged' | 'safe'>('all');
@@ -286,9 +285,8 @@ const ReportsPage = () => {
       
       {selectedReport && (
         <ReportDownload
-          open={isDownloadOpen}
-          onOpenChange={setIsDownloadOpen}
-          report={selectedReport}
+          reportData={selectedReport}
+          filename={`report-${selectedReport.id}`}
         />
       )}
     </div>
