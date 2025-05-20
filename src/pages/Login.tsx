@@ -1,75 +1,50 @@
 
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
 import { Shield, Eye, EyeOff, Sun, Moon, Monitor } from "lucide-react";
 import { motion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
   const [activeTab, setActiveTab] = useState("login");
-  const navigate = useNavigate();
+  const { signIn, signUp, user } = useAuth();
+  const { theme, setTheme } = useTheme();
 
-  // Initialize theme on component mount
-  useEffect(() => {
-    // Check if dark mode is enabled in HTML element
-    if (document.documentElement.classList.contains('dark')) {
-      setTheme('dark');
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('system');
-    } else {
-      setTheme('light');
-    }
-  }, []);
+  // If already logged in, redirect to dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
     setTheme(newTheme);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    // Apply theme changes
-    if (newTheme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.classList.toggle('dark', systemTheme === 'dark');
-    } else {
-      document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    try {
+      await signIn(email, password);
+    } catch (error) {
+      console.error("Login error:", error);
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // For demo purposes, let's just check if the form is filled
-    if (email && password) {
-      toast.success("Logged in successfully!");
-      
-      // Add animation before navigation
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 300);
-    } else {
-      toast.error("Please fill in all fields");
-    }
-  };
-
-  const handleSignup = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (email && password) {
-      toast.success("Account created successfully!");
-      
-      // Add animation before navigation
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 300);
-    } else {
-      toast.error("Please fill in all fields");
+    try {
+      await signUp(email, password);
+    } catch (error) {
+      console.error("Signup error:", error);
     }
   };
 
@@ -77,7 +52,8 @@ const Login = () => {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
       className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4"
     >
       <Card className="w-full max-w-md border-0 shadow-xl dark:bg-gray-800 dark:border-gray-700">

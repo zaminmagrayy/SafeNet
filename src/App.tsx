@@ -15,6 +15,9 @@ import Reports from "./pages/dashboard/Reports";
 import Flagged from "./pages/dashboard/Flagged";
 import Settings from "./pages/dashboard/Settings";
 import NotFound from "./pages/NotFound";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { AuthProvider } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -29,7 +32,7 @@ const AnimatedRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route index element={<Upload />} />
           <Route path="upload" element={<Upload />} />
           <Route path="reports" element={<Reports />} />
@@ -49,7 +52,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AnimatedRoutes />
+        <ThemeProvider>
+          <AuthProvider>
+            <AnimatedRoutes />
+          </AuthProvider>
+        </ThemeProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

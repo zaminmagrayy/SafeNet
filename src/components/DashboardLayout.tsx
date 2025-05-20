@@ -15,61 +15,24 @@ import {
   Monitor 
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { toast } from "sonner";
 import { Shield } from "lucide-react";
-
-type Theme = "light" | "dark" | "system";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { motion } from "framer-motion";
 
 const DashboardLayout = () => {
-  const [theme, setTheme] = useState<Theme>("light");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
+  const { theme, setTheme } = useTheme();
   
-  const handleLogout = () => {
-    toast.success("Logged out successfully");
-    navigate("/login");
+  const handleLogout = async () => {
+    await signOut();
   };
   
-  const handleThemeChange = (newTheme: Theme) => {
+  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
     setTheme(newTheme);
-    
-    // Add actual theme implementation
-    if (newTheme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.classList.toggle('dark', systemTheme === 'dark');
-    } else {
-      document.documentElement.classList.toggle('dark', newTheme === 'dark');
-    }
-    
-    toast.success(`Theme changed to ${newTheme} mode`);
-  };
-  
-  // Initialize theme on component mount
-  useEffect(() => {
-    // Check for system preference on initial load
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.classList.toggle('dark', systemTheme === 'dark');
-    } else {
-      document.documentElement.classList.toggle('dark', theme === 'dark');
-    }
-    
-    // Listen for system theme changes if in system mode
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (theme === 'system') {
-        document.documentElement.classList.toggle('dark', e.matches);
-      }
-    };
-    
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
-  
-  // Determine if a nav link is active
-  const isActive = (path: string) => {
-    return location.pathname === path ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800";
   };
   
   // Close mobile menu when route changes
@@ -83,6 +46,11 @@ const DashboardLayout = () => {
     { path: "/dashboard/flagged", label: "Flagged Accounts", icon: Flag },
     { path: "/dashboard/settings", label: "Settings", icon: Settings },
   ];
+  
+  // Determine if a nav link is active
+  const isActive = (path: string) => {
+    return location.pathname === path ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800";
+  };
   
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
@@ -169,6 +137,11 @@ const DashboardLayout = () => {
           <h1 className="font-semibold text-xl lg:hidden dark:text-white">Safe Net</h1>
           
           <div className="flex items-center gap-4">
+            {user && (
+              <div className="text-sm font-medium dark:text-gray-300">
+                {user.email}
+              </div>
+            )}
             <div className="flex items-center rounded-full bg-gray-100 dark:bg-gray-700 p-1">
               <Button
                 variant="ghost"
@@ -198,9 +171,15 @@ const DashboardLayout = () => {
           </div>
         </header>
         
-        <div className="flex-1 p-4 md:p-6 overflow-auto dark:bg-gray-900 dark:text-gray-100">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="flex-1 p-4 md:p-6 overflow-auto dark:bg-gray-900 dark:text-gray-100"
+        >
           <Outlet />
-        </div>
+        </motion.div>
       </main>
     </div>
   );
