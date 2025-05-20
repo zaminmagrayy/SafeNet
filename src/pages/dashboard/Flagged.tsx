@@ -7,6 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Search, AlertCircle, UserX } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type FlaggedAccount = {
   id: string;
@@ -80,7 +88,7 @@ const Flagged = () => {
     if (selectedAccount) {
       const updatedAccounts = accounts.map(account => 
         account.id === selectedAccount.id 
-          ? { ...account, status: "suspended" } 
+          ? { ...account, status: "suspended" as const } 
           : account
       );
       
