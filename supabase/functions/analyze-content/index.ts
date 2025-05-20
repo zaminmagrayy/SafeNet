@@ -24,14 +24,19 @@ serve(async (req) => {
   }
 
   try {
-    // Get the request body
+    // Parse request body
     let requestBody: RequestBody;
     try {
       requestBody = await req.json() as RequestBody;
     } catch (error) {
       console.error("Error parsing request body:", error);
       return new Response(
-        JSON.stringify({ error: "Invalid request body", details: error.message }),
+        JSON.stringify({ 
+          error: "Invalid request body", 
+          details: error.message,
+          safe: false,
+          reason: "Invalid request format" 
+        }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -40,14 +45,18 @@ serve(async (req) => {
 
     if (!content) {
       return new Response(
-        JSON.stringify({ error: "Content is required" }),
+        JSON.stringify({ 
+          error: "Content is required",
+          safe: false,
+          reason: "Missing content"
+        }),
         { status: 400, headers: corsHeaders }
       );
     }
 
     console.log("Analyzing content:", contentType);
 
-    // Define the prompt based on content type
+    // Create the appropriate prompt based on content type
     let prompt = "Analyze this content for potential policy violations or inappropriate material. ";
 
     if (contentType === "image") {
@@ -58,17 +67,17 @@ serve(async (req) => {
       prompt += "This is text. Look for harmful language, threats, or inappropriate content.";
     }
 
-    // Create the request payload
-    let geminiPayload;
+    // Set up API URL based on content type
     let apiUrl = GEMINI_API_URL;
+    let geminiPayload;
 
+    // Handle different content types
     if (contentType === "image") {
-      // For image analysis, we need to use gemini-pro-vision and handle base64 image
       apiUrl = GEMINI_VISION_API_URL;
       
-      // Handle potential URL or base64 string
+      // Handle image content (URL or base64)
       if (content.startsWith("http")) {
-        // If it's a URL, try to fetch the image
+        // Process image URL
         try {
           const imageResponse = await fetch(content);
           if (!imageResponse.ok) {
@@ -84,7 +93,7 @@ serve(async (req) => {
                 { text: prompt },
                 {
                   inline_data: {
-                    mime_type: "image/jpeg", // Assuming JPEG, adjust if needed
+                    mime_type: "image/jpeg",
                     data: base64Image
                   }
                 }
@@ -92,7 +101,6 @@ serve(async (req) => {
             }]
           };
         } catch (error) {
-          console.error("Error fetching image:", error);
           return new Response(
             JSON.stringify({ 
               error: "Failed to process image URL", 
@@ -104,9 +112,8 @@ serve(async (req) => {
           );
         }
       } else if (content.startsWith("data:image")) {
-        // If it's a base64 data URL
+        // Process base64 data URL
         try {
-          // Extract the base64 part after the comma
           const base64Image = content.split(',')[1];
           if (!base64Image) {
             throw new Error("Invalid base64 image format");
@@ -118,7 +125,7 @@ serve(async (req) => {
                 { text: prompt },
                 {
                   inline_data: {
-                    mime_type: content.split(';')[0].split(':')[1], // Extract mime type
+                    mime_type: content.split(';')[0].split(':')[1],
                     data: base64Image
                   }
                 }
@@ -126,7 +133,6 @@ serve(async (req) => {
             }]
           };
         } catch (error) {
-          console.error("Error processing base64 image:", error);
           return new Response(
             JSON.stringify({ 
               error: "Failed to process base64 image", 
@@ -138,7 +144,7 @@ serve(async (req) => {
           );
         }
       } else {
-        // Just use the text description as fallback
+        // Fallback for text description
         geminiPayload = {
           contents: [{
             parts: [
@@ -229,7 +235,6 @@ serve(async (req) => {
         { status: 500, headers: corsHeaders }
       );
     }
-    
   } catch (error) {
     console.error("Error in analyze-content function:", error);
     return new Response(
