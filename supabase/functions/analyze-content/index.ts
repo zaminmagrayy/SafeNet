@@ -2,8 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent";
-const GEMINI_VISION_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
+const GEMINI_VISION_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
 
 interface RequestBody {
   content: string;
@@ -62,7 +62,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Analyzing content: ${contentType}, API key available: ${GEMINI_API_KEY ? "Yes" : "No"}`);
+    console.log(`Analyzing content: ${contentType}, API key available: ${GEMINI_API_KEY ? "Yes" : "No"}, Using model: gemini-1.5-flash`);
 
     // Check if API key is available
     if (!GEMINI_API_KEY || GEMINI_API_KEY.trim() === "") {
@@ -120,7 +120,12 @@ serve(async (req) => {
                     }
                   }
                 ]
-              }]
+              }],
+              generationConfig: {
+                temperature: 0.4,
+                topK: 32,
+                topP: 1
+              }
             };
           } catch (error) {
             console.error("Failed to process image URL:", error);
@@ -146,7 +151,12 @@ serve(async (req) => {
                     }
                   }
                 ]
-              }]
+              }],
+              generationConfig: {
+                temperature: 0.4,
+                topK: 32,
+                topP: 1
+              }
             };
           } catch (error) {
             console.error("Failed to process base64 image:", error);
@@ -160,7 +170,12 @@ serve(async (req) => {
               parts: [
                 { text: `${prompt} Content description: ${content}` }
               ]
-            }]
+            }],
+            generationConfig: {
+              temperature: 0.4,
+              topK: 32,
+              topP: 1
+            }
           };
         }
       } else {
@@ -170,11 +185,16 @@ serve(async (req) => {
             parts: [
               { text: `${prompt} Content: ${content}` }
             ]
-          }]
+          }],
+          generationConfig: {
+            temperature: 0.4,
+            topK: 32,
+            topP: 1
+          }
         };
       }
 
-      console.log("Calling Gemini API...", apiUrl);
+      console.log("Calling Gemini API with model gemini-1.5-flash...", apiUrl);
       
       // Call the Gemini API
       const geminiResponse = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
