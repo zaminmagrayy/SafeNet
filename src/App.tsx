@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 
 import Index from "./pages/Index";
@@ -43,6 +43,9 @@ const AnimatedRoutes = () => {
           <Route path="flagged" element={<Flagged />} />
           <Route path="settings" element={<Settings />} />
         </Route>
+
+        {/* Special route for auth callback */}
+        <Route path="/auth/callback" element={<Navigate to="/dashboard" />} />
         
         <Route path="*" element={<NotFound />} />
       </Routes>

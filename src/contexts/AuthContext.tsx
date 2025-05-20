@@ -1,8 +1,7 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useTheme } from "./ThemeContext";
 import { Profile } from "@/types/database";
@@ -27,6 +26,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme } = useTheme();
 
   const fetchUserProfile = async (userId: string) => {
@@ -51,9 +51,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // Handle the hash fragment for authentication
+    const handleAuthFromHash = async () => {
+      const hasHashParams = location.hash && location.hash.length > 0;
+      
+      if (hasHashParams) {
+        try {
+          const { data, error } = await supabase.auth.getSessionFromUrl();
+          if (error) {
+            console.error("Error getting session from URL:", error);
+            toast.error("Authentication error. Please try again.");
+          } else if (data?.session) {
+            // Successfully got session from URL
+            setSession(data.session);
+            setUser(data.session.user);
+            
+            if (data.session.user) {
+              setTimeout(() => {
+                fetchUserProfile(data.session.user.id);
+                navigate('/dashboard', { replace: true });
+              }, 0);
+            }
+            
+            toast.success("Authentication successful!");
+          }
+        } catch (err) {
+          console.error("Error processing auth callback:", err);
+        }
+      }
+    };
+    
+    handleAuthFromHash();
+    
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("Auth state change event:", event);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -90,7 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, location]);
 
   const signIn = async (email: string, password: string) => {
     try {
