@@ -28,6 +28,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -37,12 +45,21 @@ import {
   Download, 
   Trash2, 
   FileText,
-  Loader2
+  Loader2,
+  Eye 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import ReportDownload from '@/components/ReportDownload';
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // Report type definition
 type Report = {
@@ -65,6 +82,7 @@ const ReportsPage = () => {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const { user } = useAuth();
   
   // Fetch reports from database
@@ -161,6 +179,11 @@ const ReportsPage = () => {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date);
+  };
+
+  const handleViewDetails = (report: Report) => {
+    setSelectedReport(report);
+    setIsDetailsDialogOpen(true);
   };
 
   if (isLoading) {
@@ -261,11 +284,9 @@ const ReportsPage = () => {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => {
-                          // Logic to view full report details
-                        }}
+                        onClick={() => handleViewDetails(report)}
                       >
-                        <FileText className="mr-2 h-4 w-4" />
+                        <Eye className="mr-2 h-4 w-4" />
                         View Details
                       </Button>
                       <AlertDialog>
@@ -321,6 +342,109 @@ const ReportsPage = () => {
           filename={`report-${selectedReport.id}`}
         />
       )}
+
+      {/* Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>Report Details</DialogTitle>
+            <DialogDescription>
+              Complete information about this content report
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedReport && (
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <img 
+                  src={selectedReport.thumbnail} 
+                  alt="Content thumbnail" 
+                  className="max-h-[300px] rounded-md object-contain border border-gray-200 dark:border-gray-800" 
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium">Report Information</h3>
+                  <Badge variant={selectedReport.status === 'flagged' ? 'destructive' : 'secondary'}>
+                    {selectedReport.status === 'flagged' ? 'Flagged' : 'Safe'}
+                  </Badge>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px]">Property</TableHead>
+                      <TableHead>Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-medium">Report ID</TableCell>
+                      <TableCell>{selectedReport.id}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Content Type</TableCell>
+                      <TableCell className="capitalize">{selectedReport.contentType}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Upload Time</TableCell>
+                      <TableCell>{formatDate(selectedReport.uploadTime)}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">User</TableCell>
+                      <TableCell>{selectedReport.user}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+
+                <h3 className="text-lg font-medium pt-4">AI Analysis</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px]">Property</TableHead>
+                      <TableHead>Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="font-medium">Reason</TableCell>
+                      <TableCell>{selectedReport.aiAnalysis?.reason || 'No reason provided'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Category</TableCell>
+                      <TableCell>{selectedReport.aiAnalysis?.category || 'Unknown'}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium">Confidence</TableCell>
+                      <TableCell>{((selectedReport.aiAnalysis?.confidence || 0) * 100).toFixed(1)}%</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex space-x-2">
+            <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
+            <Button 
+              variant="default" 
+              onClick={() => {
+                if (selectedReport) {
+                  const reportJson = new Blob([JSON.stringify(selectedReport, null, 2)], { type: 'application/json' });
+                  const link = document.createElement('a');
+                  link.href = URL.createObjectURL(reportJson);
+                  link.download = `report-${selectedReport.id}.json`;
+                  link.click();
+                  toast.success("Report downloaded successfully");
+                }
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" /> Download Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

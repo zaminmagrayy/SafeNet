@@ -39,38 +39,96 @@ const ReportDownload = ({ reportData, filename = "report" }: ReportDownloadProps
     try {
       setIsDownloading(true);
       
-      // Create a simple HTML template with the JSON data
+      // Format the report data into a more readable structure
+      const report = reportData;
+      const status = report.status || "unknown";
+      const statusClass = status === 'flagged' ? 'flag-unsafe' : 'flag-safe';
+      
+      // Create a simple HTML template with formatted data
       const html = `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>${filename || 'Report'}</title>
+          <title>Content Report: ${report.id || filename}</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; margin: 0; padding: 20px; line-height: 1.6; color: #333; }
             h1 { color: #6200ea; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
             .report-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
             .report-section { margin-bottom: 20px; }
             .report-section h2 { color: #7e57c2; margin-top: 30px; }
-            .report-data { background: #f5f5f5; padding: 15px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; overflow-x: auto; }
+            .report-data { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; }
+            .report-table { width: 100%; border-collapse: collapse; }
+            .report-table th { text-align: left; padding: 8px; background-color: #f0f0f0; }
+            .report-table td { padding: 8px; border-bottom: 1px solid #ddd; }
             .timestamp { color: #757575; font-size: 14px; margin-top: 30px; text-align: right; }
             .flag { padding: 4px 8px; border-radius: 4px; font-size: 14px; font-weight: 600; display: inline-block; margin-right: 8px; }
             .flag-safe { background-color: #e6f7e6; color: #2e7d32; }
             .flag-warning { background-color: #fff8e1; color: #f57f17; }
             .flag-unsafe { background-color: #ffebee; color: #c62828; }
+            .thumbnail { max-width: 300px; margin-top: 20px; border-radius: 4px; }
           </style>
         </head>
         <body>
           <div class="report-container">
-            <h1>Content Analysis Report</h1>
+            <h1>Content Moderation Report</h1>
             
             <div class="report-section">
-              <h2>Analysis Results</h2>
-              <div class="report-data">${JSON.stringify(reportData, null, 2)}</div>
+              <h2>Report Summary</h2>
+              <div class="report-data">
+                <table class="report-table">
+                  <tr>
+                    <th>Report ID</th>
+                    <td>${report.id || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <th>Content Type</th>
+                    <td>${report.contentType || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <th>Upload Time</th>
+                    <td>${new Date(report.uploadTime).toLocaleString() || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <th>Status</th>
+                    <td><span class="flag ${statusClass}">${report.status || 'N/A'}</span></td>
+                  </tr>
+                  <tr>
+                    <th>User</th>
+                    <td>${report.user || 'N/A'}</td>
+                  </tr>
+                </table>
+              </div>
             </div>
             
-            <div class="timestamp">Generated on ${new Date().toLocaleString()}</div>
+            <div class="report-section">
+              <h2>AI Analysis Results</h2>
+              <div class="report-data">
+                <table class="report-table">
+                  <tr>
+                    <th>Reason</th>
+                    <td>${report.aiAnalysis?.reason || 'No reason provided'}</td>
+                  </tr>
+                  <tr>
+                    <th>Category</th>
+                    <td>${report.aiAnalysis?.category || 'Unknown'}</td>
+                  </tr>
+                  <tr>
+                    <th>Confidence</th>
+                    <td>${((report.aiAnalysis?.confidence || 0) * 100).toFixed(1)}%</td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+            
+            ${report.thumbnail ? `
+            <div class="report-section">
+              <h2>Content Thumbnail</h2>
+              <img src="${report.thumbnail}" alt="Content thumbnail" class="thumbnail" />
+            </div>` : ''}
+            
+            <div class="timestamp">Report generated on ${new Date().toLocaleString()}</div>
           </div>
         </body>
       </html>
