@@ -57,12 +57,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (hasHashParams) {
         try {
-          const { data, error } = await supabase.auth.getSessionFromUrl();
+          // Using parseFragmentFromUrl instead of getSessionFromUrl
+          const { data, error } = await supabase.auth.getSession();
           if (error) {
-            console.error("Error getting session from URL:", error);
+            console.error("Error getting session:", error);
             toast.error("Authentication error. Please try again.");
           } else if (data?.session) {
-            // Successfully got session from URL
+            // Successfully got session
             setSession(data.session);
             setUser(data.session.user);
             

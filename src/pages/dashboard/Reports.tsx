@@ -2,17 +2,19 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Search, AlertTriangle, CheckCircle, Info, Loader2 } from "lucide-react";
+import { FileText, Search, AlertTriangle, CheckCircle, Info, Loader2, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import ReportDownload from "@/components/ReportDownload";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const Reports = () => {
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -98,6 +100,13 @@ const Reports = () => {
     }
   };
 
+  const handleDeleteReport = (id: string) => {
+    setReports(reports.filter(report => report.id !== id));
+    setSelectedReport(null);
+    setConfirmDelete(null);
+    toast.success("Report deleted successfully");
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "safe":
@@ -177,29 +186,39 @@ const Reports = () => {
                 <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                   {reports.map((report) => (
                     <li key={report.id}>
-                      <button
-                        onClick={() => setSelectedReport(report)}
-                        className={`w-full p-4 text-left flex items-start gap-3 transition-colors ${
-                          selectedReport?.id === report.id
-                            ? "bg-gray-100 dark:bg-gray-800"
-                            : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                        }`}
-                      >
-                        <div className="mt-1">
-                          {getStatusIcon(report.status)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate dark:text-gray-200">
-                            {report.filename}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {format(new Date(report.date), "MMM d, yyyy")}
-                          </p>
-                          <div className="mt-2">
-                            {getStatusBadge(report.status)}
+                      <div className="flex justify-between p-4">
+                        <button
+                          onClick={() => setSelectedReport(report)}
+                          className={`text-left flex items-start gap-3 transition-colors flex-1 ${
+                            selectedReport?.id === report.id
+                              ? "text-primary"
+                              : "hover:text-primary"
+                          }`}
+                        >
+                          <div className="mt-1">
+                            {getStatusIcon(report.status)}
                           </div>
-                        </div>
-                      </button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate dark:text-gray-200">
+                              {report.filename}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {format(new Date(report.date), "MMM d, yyyy")}
+                            </p>
+                            <div className="mt-2">
+                              {getStatusBadge(report.status)}
+                            </div>
+                          </div>
+                        </button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                          onClick={() => setConfirmDelete(report.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -225,8 +244,16 @@ const Reports = () => {
                         Uploaded on {format(new Date(selectedReport.date), "MMMM d, yyyy 'at' h:mm a")}
                       </CardDescription>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-2">
                       {getStatusBadge(selectedReport.status)}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                        onClick={() => setConfirmDelete(selectedReport.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -337,6 +364,26 @@ const Reports = () => {
           </Card>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Report</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this report? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => confirmDelete && handleDeleteReport(confirmDelete)}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 };

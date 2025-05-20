@@ -32,10 +32,37 @@ const Flagged = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   
-  const filteredAccounts = accounts.filter(account => 
-    account.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    account.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Add sample data for testing if none exists
+  useEffect(() => {
+    if (accounts.length === 0) {
+      const sampleData: FlaggedAccount[] = [
+        {
+          id: "1",
+          username: "suspicious_user",
+          email: "suspicious@example.com",
+          violations: 3,
+          lastViolation: new Date().toISOString(),
+          status: "active"
+        },
+        {
+          id: "2",
+          username: "banned_account",
+          email: "banned@example.com",
+          violations: 5,
+          lastViolation: new Date(Date.now() - 86400000).toISOString(),
+          status: "suspended"
+        }
+      ];
+      setAccounts(sampleData);
+    }
+  }, [accounts.length]);
+  
+  // Parse search input safely and filter accounts
+  const filteredAccounts = accounts.filter(account => {
+    const searchTermLower = searchTerm.toLowerCase().trim();
+    return account.username.toLowerCase().includes(searchTermLower) ||
+           account.email.toLowerCase().includes(searchTermLower);
+  });
   
   const handleSuspendAccount = (account: FlaggedAccount) => {
     setSelectedAccount(account);
@@ -63,14 +90,19 @@ const Flagged = () => {
   };
   
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+    try {
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "Invalid date";
+    }
   };
 
   // Method to add a new flagged account (will be called when a flagged report is linked to an account)
@@ -116,39 +148,39 @@ const Flagged = () => {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b dark:border-gray-700">
-                  <th className="text-left p-4 dark:text-gray-300">Username</th>
-                  <th className="text-left p-4 dark:text-gray-300">Email</th>
-                  <th className="text-left p-4 dark:text-gray-300">Violations</th>
-                  <th className="text-left p-4 dark:text-gray-300">Last Violation</th>
-                  <th className="text-left p-4 dark:text-gray-300">Status</th>
-                  <th className="text-right p-4 dark:text-gray-300">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Violations</TableHead>
+                  <TableHead>Last Violation</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredAccounts.length > 0 ? (
                   filteredAccounts.map((account) => (
-                    <tr key={account.id} className="border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
-                      <td className="p-4">
+                    <TableRow key={account.id}>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                             {account.username.charAt(0).toUpperCase()}
                           </div>
                           <span className="font-medium dark:text-gray-300">{account.username}</span>
                         </div>
-                      </td>
-                      <td className="p-4 dark:text-gray-300">{account.email}</td>
-                      <td className="p-4">
+                      </TableCell>
+                      <TableCell className="dark:text-gray-300">{account.email}</TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <Badge variant="destructive" className="rounded-full">
                             {account.violations}
                           </Badge>
                         </div>
-                      </td>
-                      <td className="p-4 text-sm dark:text-gray-300">{formatDate(account.lastViolation)}</td>
-                      <td className="p-4">
+                      </TableCell>
+                      <TableCell className="text-sm dark:text-gray-300">{formatDate(account.lastViolation)}</TableCell>
+                      <TableCell>
                         <Badge 
                           variant={account.status === "active" ? "outline" : "secondary"}
                           className={account.status === "suspended" ? "bg-gray-200 dark:bg-gray-700" : ""}
@@ -165,10 +197,10 @@ const Flagged = () => {
                             </span>
                           )}
                         </Badge>
-                      </td>
-                      <td className="p-4 text-right">
+                      </TableCell>
+                      <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {account.status === "active" ? (
+                          {account.status === "active" && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -178,8 +210,6 @@ const Flagged = () => {
                               <UserX className="h-4 w-4 mr-1" />
                               Suspend
                             </Button>
-                          ) : (
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Suspended</span>
                           )}
                           <Button 
                             variant="ghost" 
@@ -190,18 +220,18 @@ const Flagged = () => {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={6} className="p-4 text-center text-gray-500 dark:text-gray-400">
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-gray-500 dark:text-gray-400 py-6">
                       No flagged accounts found
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
