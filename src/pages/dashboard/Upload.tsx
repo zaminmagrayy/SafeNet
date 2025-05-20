@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Upload as UploadIcon, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ContentType = 'video' | 'image' | 'text';
 type AnalysisResult = 'safe' | 'flagged';
@@ -33,6 +34,7 @@ const UploadPage = () => {
   const [analysisDetails, setAnalysisDetails] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -84,6 +86,11 @@ const UploadPage = () => {
     
     if (!url && !file) {
       toast.error('Please provide a URL or upload a file');
+      return;
+    }
+
+    if (!user) {
+      toast.error('You must be logged in to upload content');
       return;
     }
     
@@ -147,48 +154,88 @@ const UploadPage = () => {
             : 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop';
       }
       
-      // Create report object that matches the Report type
-      const report = {
-        id: reportId,
-        thumbnail: thumbnailUrl,
-        contentType,
-        uploadTime: new Date().toISOString(),
-        status: finalResult,
-        user: 'current.user@example.com', // This would be the actual logged-in user
-        aiAnalysis: {
-          reason: analysisResult.reason || 'No specific reason provided',
-          category: analysisResult.category || 'unknown',
-          confidence: analysisResult.confidence || 0.5
-        }
-      };
-      
-      // Add the report to the reports list using the exposed method from Reports component
-      if (typeof (window as any).addReportToList === 'function') {
-        (window as any).addReportToList(report);
-      }
-      
-      // If content is flagged, also add to flagged accounts list
-      if (finalResult === 'flagged') {
-        const flaggedAccount = {
-          id: 'usr-' + Date.now().toString().substring(6),
-          username: 'current_user',
-          email: 'current.user@example.com',
-          violations: 1,
-          lastViolation: new Date().toISOString(),
-          status: 'active' as const,
-          violationType: analysisResult.category || 'policy_violation'
+      // Save report to Supabase database
+      const { data: reportData, error: reportError } = await supabase
+        .from('content_reports')
+        .insert({
+          user_id: user.id,
+          content_type: contentType,
+          thumbnail: thumbnailUrl,
+          status: finalResult,
+          upload_time: new Date().toISOString(),
+          ai_analysis: analysisResult
+        })
+        .select('id')
+        .single();
+
+      if (reportError) {
+        console.error('Error saving report to database:', reportError);
+        toast.error('Failed to save content report');
+      } else {
+        console.log('Report saved to database:', reportData);
+        
+        // Create report object that matches the Report type for the UI
+        const report = {
+          id: reportData?.id || reportId,
+          thumbnail: thumbnailUrl,
+          contentType,
+          uploadTime: new Date().toISOString(),
+          status: finalResult,
+          user: user.email || 'current.user@example.com',
+          aiAnalysis: {
+            reason: analysisResult.reason || 'No specific reason provided',
+            category: analysisResult.category || 'unknown',
+            confidence: analysisResult.confidence || 0.5
+          }
         };
         
-        if (typeof (window as any).addFlaggedAccount === 'function') {
-          (window as any).addFlaggedAccount(flaggedAccount);
+        // Add the report to the reports list using the exposed method from Reports component
+        if (typeof (window as any).addReportToList === 'function') {
+          (window as any).addReportToList(report);
         }
-      }
-      
-      // Navigate to reports page after a delay to see the new report
-      if (finalResult === 'flagged') {
-        setTimeout(() => {
-          navigate('/dashboard/reports');
-        }, 2000);
+        
+        // If content is flagged, also add to flagged accounts list
+        if (finalResult === 'flagged') {
+          const { data: flaggedData, error: flaggedError } = await supabase
+            .from('flagged_accounts')
+            .upsert({
+              user_id: user.id,
+              username: user.email?.split('@')[0] || 'user',
+              email: user.email || 'unknown',
+              last_violation: new Date().toISOString(),
+              status: 'active',
+              violation_type: analysisResult.category || 'policy_violation'
+            }, {
+              onConflict: 'user_id', 
+              ignoreDuplicates: false
+            })
+            .select();
+
+          if (flaggedError) {
+            console.error('Error adding flagged account to database:', flaggedError);
+          } else {
+            console.log('Flagged account added to database:', flaggedData);
+            
+            const flaggedAccount = {
+              id: flaggedData?.[0]?.id || 'usr-' + Date.now().toString().substring(6),
+              username: user.email?.split('@')[0] || 'current_user',
+              email: user.email || 'current.user@example.com',
+              violations: 1,
+              lastViolation: new Date().toISOString(),
+              status: 'active' as const,
+              violationType: analysisResult.category || 'policy_violation'
+            };
+            
+            if (typeof (window as any).addFlaggedAccount === 'function') {
+              (window as any).addFlaggedAccount(flaggedAccount);
+            }
+          }
+          
+          // Navigate to reports page after a delay to see the new report
+          setTimeout(() => {
+            navigate('/dashboard/reports');
+          }, 2000);
+        }
       }
       
     } catch (error) {

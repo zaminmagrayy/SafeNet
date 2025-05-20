@@ -37,9 +37,12 @@ import {
   Trash2,
   Ban,
   UserX,
-  ShieldAlert
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Type for flagged accounts
 type FlaggedAccount = {
@@ -52,40 +55,51 @@ type FlaggedAccount = {
   violationType: string;
 };
 
-// Mock data for flagged accounts
-const INITIAL_FLAGGED_ACCOUNTS: FlaggedAccount[] = [
-  {
-    id: 'usr-123456',
-    username: 'user1',
-    email: 'user1@example.com',
-    violations: 3,
-    lastViolation: '2024-04-15T10:30:00Z',
-    status: 'active',
-    violationType: 'hate_speech'
-  },
-  {
-    id: 'usr-234567',
-    username: 'user2',
-    email: 'user2@example.com',
-    violations: 5,
-    lastViolation: '2024-04-13T14:20:00Z',
-    status: 'suspended',
-    violationType: 'violence'
-  },
-  {
-    id: 'usr-345678',
-    username: 'user3',
-    email: 'user3@example.com',
-    violations: 10,
-    lastViolation: '2024-04-10T09:15:00Z',
-    status: 'banned',
-    violationType: 'policy_violation'
-  }
-];
-
 const FlaggedPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [flaggedAccounts, setFlaggedAccounts] = useState<FlaggedAccount[]>(INITIAL_FLAGGED_ACCOUNTS);
+  const [flaggedAccounts, setFlaggedAccounts] = useState<FlaggedAccount[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  
+  // Fetch flagged accounts from database
+  const fetchFlaggedAccounts = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('flagged_accounts')
+        .select('*')
+        .order('last_violation', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        // Transform database data to FlaggedAccount type
+        const transformedAccounts: FlaggedAccount[] = data.map((account: any) => ({
+          id: account.id,
+          username: account.username || 'unknown',
+          email: account.email || 'unknown',
+          violations: account.violations || 1,
+          lastViolation: account.last_violation,
+          status: account.status,
+          violationType: account.violation_type || 'policy_violation'
+        }));
+        
+        setFlaggedAccounts(transformedAccounts);
+      }
+    } catch (error) {
+      console.error('Error fetching flagged accounts:', error);
+      toast.error('Failed to load flagged accounts');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Fetch flagged accounts on component mount
+  useEffect(() => {
+    fetchFlaggedAccounts();
+  }, []);
   
   // Function to add a flagged account (exposed to Upload component)
   const addFlaggedAccount = (newAccount: FlaggedAccount) => {
@@ -117,17 +131,45 @@ const FlaggedPage = () => {
     };
   }, [flaggedAccounts]);
   
-  const handleDeleteAccount = (id: string) => {
-    setFlaggedAccounts(flaggedAccounts.filter(account => account.id !== id));
-    toast.success("Account removed from flagged list");
+  const handleDeleteAccount = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('flagged_accounts')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      setFlaggedAccounts(flaggedAccounts.filter(account => account.id !== id));
+      toast.success("Account removed from flagged list");
+    } catch (error) {
+      console.error('Error deleting flagged account:', error);
+      toast.error('Failed to delete account');
+    }
   };
   
-  const handleUpdateStatus = (id: string, status: 'active' | 'suspended' | 'banned') => {
-    setFlaggedAccounts(flaggedAccounts.map(account => 
-      account.id === id ? { ...account, status } : account
-    ));
-    
-    toast.success(`Account status updated to ${status}`);
+  const handleUpdateStatus = async (id: string, status: 'active' | 'suspended' | 'banned') => {
+    try {
+      const { error } = await supabase
+        .from('flagged_accounts')
+        .update({ status })
+        .eq('id', id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      setFlaggedAccounts(flaggedAccounts.map(account => 
+        account.id === id ? { ...account, status } : account
+      ));
+      
+      toast.success(`Account status updated to ${status}`);
+    } catch (error) {
+      console.error('Error updating account status:', error);
+      toast.error('Failed to update account status');
+    }
   };
   
   // Filter accounts based on search query
@@ -157,6 +199,15 @@ const FlaggedPage = () => {
         return '';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+        <span className="ml-2 text-lg">Loading flagged accounts...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

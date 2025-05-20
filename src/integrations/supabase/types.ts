@@ -9,6 +9,75 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      content_reports: {
+        Row: {
+          ai_analysis: Json | null
+          content_type: string
+          created_at: string | null
+          id: string
+          status: string
+          thumbnail: string | null
+          upload_time: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          content_type: string
+          created_at?: string | null
+          id?: string
+          status: string
+          thumbnail?: string | null
+          upload_time?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          content_type?: string
+          created_at?: string | null
+          id?: string
+          status?: string
+          thumbnail?: string | null
+          upload_time?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      flagged_accounts: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          last_violation: string | null
+          status: string
+          user_id: string
+          username: string | null
+          violation_type: string | null
+          violations: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          last_violation?: string | null
+          status: string
+          user_id: string
+          username?: string | null
+          violation_type?: string | null
+          violations?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          last_violation?: string | null
+          status?: string
+          user_id?: string
+          username?: string | null
+          violation_type?: string | null
+          violations?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

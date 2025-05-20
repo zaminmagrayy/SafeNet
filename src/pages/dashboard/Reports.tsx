@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
@@ -35,9 +36,12 @@ import {
   CheckCircle2, 
   Download, 
   Trash2, 
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import ReportDownload from '@/components/ReportDownload';
 
 // Report type definition
@@ -55,54 +59,59 @@ type Report = {
   };
 };
 
-// Mock data for content reports - fixed to match Report type explicitly
-const INITIAL_REPORTS: Report[] = [
-  {
-    id: 'rep-123456',
-    thumbnail: 'https://images.unsplash.com/photo-1649972954532-a0e5f16268ba?w=500&h=350&fit=crop',
-    contentType: 'video',
-    uploadTime: '2024-04-15T10:30:00Z',
-    status: 'flagged',
-    user: 'user1@example.com',
-    aiAnalysis: {
-      reason: 'Contains violent imagery',
-      category: 'violence',
-      confidence: 0.89
-    }
-  },
-  {
-    id: 'rep-234567',
-    thumbnail: 'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=500&h=350&fit=crop',
-    contentType: 'image',
-    uploadTime: '2024-04-14T14:20:00Z',
-    status: 'safe',
-    user: 'user2@example.com',
-    aiAnalysis: {
-      reason: 'No issues detected',
-      category: 'safe',
-      confidence: 0.95
-    }
-  },
-  {
-    id: 'rep-345678',
-    thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop',
-    contentType: 'text',
-    uploadTime: '2024-04-13T09:15:00Z',
-    status: 'flagged',
-    user: 'user3@example.com',
-    aiAnalysis: {
-      reason: 'Potentially offensive language',
-      category: 'hate_speech',
-      confidence: 0.76
-    }
-  }
-];
-
 const ReportsPage = () => {
   const [filter, setFilter] = useState<'all' | 'flagged' | 'safe'>('all');
-  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
+  const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  
+  // Fetch reports from database
+  const fetchReports = async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('content_reports')
+        .select('*')
+        .order('upload_time', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        // Transform database data to Report type
+        const transformedReports: Report[] = data.map((report: any) => ({
+          id: report.id,
+          thumbnail: report.thumbnail,
+          contentType: report.content_type,
+          uploadTime: report.upload_time,
+          status: report.status,
+          user: user.email || 'unknown',
+          aiAnalysis: {
+            reason: report.ai_analysis?.reason || 'No reason provided',
+            category: report.ai_analysis?.category || 'unknown',
+            confidence: report.ai_analysis?.confidence || 0.5
+          }
+        }));
+        
+        setReports(transformedReports);
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+      toast.error('Failed to load reports');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Fetch reports on component mount
+  useEffect(() => {
+    fetchReports();
+  }, [user]);
   
   // Function to add a new report (exposed to Upload component)
   const addReportToList = (newReport: Report) => {
@@ -124,9 +133,23 @@ const ReportsPage = () => {
     return report.status === filter;
   });
   
-  const handleDeleteReport = (reportId: string) => {
-    setReports(reports.filter(report => report.id !== reportId));
-    toast.success("Report deleted successfully");
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      const { error } = await supabase
+        .from('content_reports')
+        .delete()
+        .eq('id', reportId);
+      
+      if (error) {
+        throw error;
+      }
+      
+      setReports(reports.filter(report => report.id !== reportId));
+      toast.success("Report deleted successfully");
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast.error('Failed to delete report');
+    }
   };
   
   const formatDate = (dateString: string) => {
@@ -139,6 +162,15 @@ const ReportsPage = () => {
       minute: '2-digit'
     }).format(date);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+        <span className="ml-2 text-lg">Loading reports...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
