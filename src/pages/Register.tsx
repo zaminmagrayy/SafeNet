@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,9 +30,9 @@ const Register = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [signupComplete, setSignupComplete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { signUp, user } = useAuth();
-  const navigate = useNavigate();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,6 +49,44 @@ const Register = () => {
   // If already logged in, redirect to dashboard
   if (user) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // If signup is complete but not logged in, show success message
+  if (signupComplete && !user) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4"
+      >
+        <Card className="w-full max-w-md border-0 shadow-xl dark:bg-gray-800 dark:border-gray-700">
+          <CardHeader className="space-y-1 flex flex-col items-center">
+            <motion.div 
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-2"
+            >
+              <Shield className="h-6 w-6 text-green-600 dark:text-green-300" />
+            </motion.div>
+            <CardTitle className="text-2xl font-bold text-center dark:text-white">Registration Successful!</CardTitle>
+            <CardDescription className="text-center dark:text-gray-300">
+              Your account has been created. You can now sign in.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="flex flex-col space-y-4 pt-4">
+            <Button 
+              onClick={() => window.location.href = '/login'} 
+              className="w-full bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"
+            >
+              Go to Login
+            </Button>
+          </CardFooter>
+        </Card>
+      </motion.div>
+    );
   }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,7 +134,8 @@ const Register = () => {
         throw signUpError;
       }
       
-      // No need to navigate as the AuthContext will handle this automatically
+      // Mark signup as complete if no error
+      setSignupComplete(true);
       
     } catch (error: any) {
       console.error("Registration error:", error);

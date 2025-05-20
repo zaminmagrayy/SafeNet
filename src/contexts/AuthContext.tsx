@@ -98,12 +98,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
+        if (error.message.includes("Email not confirmed")) {
+          // Special handling for unconfirmed emails
+          toast.error("Your email is not confirmed. Please check your inbox for a confirmation link or try resending the confirmation.");
+        } else {
+          toast.error(error.message || "Failed to sign in");
+        }
         throw error;
       }
       
       toast.success("Signed in successfully!");
     } catch (error: any) {
-      toast.error(error.message || "Failed to sign in");
+      // Error is already handled above
       throw error;
     } finally {
       setLoading(false);
@@ -113,7 +119,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
     try {
       setLoading(true);
-      // Adding emailRedirectTo option to ensure proper redirect after signup
       const { error, data } = await supabase.auth.signUp({ 
         email, 
         password,
@@ -132,19 +137,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error };
       }
       
-      // If user is created without email confirmation required, sign them in directly
-      if (data.user && !data.session) {
-        // Wait a moment before attempting to sign in to allow the database to update
-        setTimeout(async () => {
-          await signIn(email, password);
-        }, 1000);
-        toast.success("Account created successfully! Signing you in...");
+      if (data.user && !data.user.confirmed_at) {
+        // Email confirmation is required - show appropriate message
+        toast.info("Account created! Please check your email to confirm your registration before signing in.", {
+          duration: 6000,
+        });
+        
+        // Navigate to login page after a short delay
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+        
+        return { error: null };
       } else if (data.session) {
-        // User is already signed in
+        // User is already signed in (email confirmation not required)
         toast.success("Account created successfully!");
+        return { error: null };
+      } else {
+        // Attempt to sign in automatically if no confirmation required
+        try {
+          await signIn(email, password);
+        } catch (signInError) {
+          // If auto sign-in fails, direct to login page
+          setTimeout(() => {
+            navigate('/login');
+          }, 1000);
+        }
+        return { error: null };
       }
-      
-      return { error: null };
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");
       return { error };
