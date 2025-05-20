@@ -5,22 +5,16 @@ import { User, Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useTheme } from "./ThemeContext";
-
-type UserProfile = {
-  id: string;
-  full_name: string | null;
-  phone: string | null;
-  avatar_url: string | null;
-};
+import { Profile } from "@/types/database";
 
 type AuthContextType = {
   user: User | null;
   session: Session | null;
-  userProfile: UserProfile | null;
+  userProfile: Profile | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, phone?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  updateProfile: (profile: Partial<UserProfile>, avatarFile?: File | null) => Promise<void>;
+  updateProfile: (profile: Partial<Profile>, avatarFile?: File | null) => Promise<void>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   loading: boolean;
 };
@@ -29,7 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -49,7 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data) {
-        setUserProfile(data as UserProfile);
+        setUserProfile(data as Profile);
       }
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
@@ -116,7 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
     try {
       setLoading(true);
       const { error } = await supabase.auth.signUp({ 
@@ -124,7 +118,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         password,
         options: {
           data: {
-            full_name: '', // Will be updated later
+            full_name: fullName,
+            phone: phone || '',
             theme: theme // Save the current theme
           }
         }
@@ -157,7 +152,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateProfile = async (profile: Partial<UserProfile>, avatarFile?: File | null) => {
+  const updateProfile = async (profile: Partial<Profile>, avatarFile?: File | null) => {
     try {
       setLoading(true);
       
@@ -166,16 +161,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       
       // Prepare profile update
-      const updates = {
+      const updates: Partial<Profile> = {
         ...profile,
         updated_at: new Date().toISOString(),
+        id: user.id // Include ID to fix TypeScript error
       };
       
       // Handle avatar upload if provided
       if (avatarFile) {
         // Upload the file to the storage
         const fileExt = avatarFile.name.split('.').pop();
-        const filePath = `avatars/${user.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `${user.id}/${Math.random().toString(36).substring(2)}.${fileExt}`;
         
         const { error: uploadError } = await supabase
           .storage

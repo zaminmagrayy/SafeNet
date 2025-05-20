@@ -4,9 +4,8 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Shield, Eye, EyeOff, Upload, X, User } from "lucide-react";
+import { Shield, Eye, EyeOff, Upload, X, User, Phone } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -14,7 +13,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { supabase } from "@/integrations/supabase/client";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const formSchema = z.object({
   fullName: z.string().min(2, { message: "Name must be at least 2 characters" }),
@@ -36,6 +35,7 @@ const Register = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { signUp, user } = useAuth();
   const navigate = useNavigate();
+  const { theme } = useTheme();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -88,7 +88,12 @@ const Register = () => {
       setIsSubmitting(true);
       
       // Create the user in Supabase Auth
-      const { error: signUpError } = await signUp(data.email, data.password);
+      const { error: signUpError } = await signUp(
+        data.email, 
+        data.password, 
+        data.fullName,
+        data.phone
+      );
       
       if (signUpError) {
         throw signUpError;
@@ -97,7 +102,10 @@ const Register = () => {
       // At this point, the user has been created and the auth state will update
       toast.success("Account created successfully! Redirecting to dashboard...");
       
-      // Since our AuthContext will handle the session update, we don't need to manually redirect
+      // Navigate to the login page if not automatically redirected
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
       
     } catch (error: any) {
       console.error("Registration error:", error);
@@ -220,15 +228,18 @@ const Register = () => {
                 name="phone"
                 render={({ field }) => (
                   <FormItem className="space-y-2">
-                    <FormLabel className="dark:text-gray-200">Phone Number (Optional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="tel" 
-                        placeholder="+1 (555) 123-4567" 
-                        {...field}
-                        className="dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      />
-                    </FormControl>
+                    <FormLabel className="dark:text-gray-200">Phone Number</FormLabel>
+                    <div className="relative">
+                      <FormControl>
+                        <Input 
+                          type="tel" 
+                          placeholder="+1 (555) 123-4567" 
+                          {...field}
+                          className="dark:bg-gray-700 dark:border-gray-600 dark:text-white pl-9"
+                        />
+                      </FormControl>
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
