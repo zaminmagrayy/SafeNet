@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { 
   Card, 
@@ -14,10 +13,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Upload as UploadIcon, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Upload as UploadIcon, AlertCircle, CheckCircle2, Loader2, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { useToast } from "@/hooks/use-toast";
 
 type ContentType = 'video' | 'image' | 'text';
 type AnalysisResult = 'safe' | 'flagged';
@@ -35,6 +36,7 @@ const UploadPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast: showToast } = useToast();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -231,10 +233,19 @@ const UploadPage = () => {
             }
           }
           
-          // Navigate to reports page after a delay to see the new report
-          setTimeout(() => {
-            navigate('/dashboard/reports');
-          }, 2000);
+          // Show a toast notification instead of navigating
+          showToast({
+            title: "Content Analysis Complete",
+            description: "Your content was flagged for potential policy violations. View the full report in the Moderation Reports tab.",
+            variant: "destructive",
+          });
+        } else {
+          // Show a success toast for safe content
+          showToast({
+            title: "Content Analysis Complete",
+            description: "Your content has been analyzed and marked as safe. A report is available in the Moderation Reports tab.",
+            variant: "default",
+          });
         }
       }
       
@@ -257,6 +268,11 @@ const UploadPage = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // Create a function to navigate to reports
+  const navigateToReports = () => {
+    navigate('/dashboard/reports');
   };
 
   return (
@@ -435,31 +451,56 @@ const UploadPage = () => {
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
             {result === 'safe' ? (
-              <p className="text-gray-700 dark:text-gray-300">
-                Our AI analysis indicates that your content is safe for our platform.
-                The content has been processed and can now be published.
-              </p>
+              <div className="space-y-4">
+                <p className="text-gray-700 dark:text-gray-300">
+                  Our AI analysis indicates that your content is safe for our platform.
+                  The content has been processed and can now be published.
+                </p>
+                {analysisDetails && (
+                  <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                    <AlertTitle className="text-green-800 dark:text-green-300">AI Analysis Results</AlertTitle>
+                    <AlertDescription className="text-green-700 dark:text-green-400">
+                      {analysisDetails.reason || "No specific issues were found in your content."}
+                      {analysisDetails.aiResponse && (
+                        <div className="mt-2 text-sm border-l-2 border-green-300 dark:border-green-700 pl-3 italic">
+                          {analysisDetails.aiResponse.substring(0, 200)}
+                          {analysisDetails.aiResponse.length > 200 ? "..." : ""}
+                        </div>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
             ) : (
               <div className="space-y-4">
                 <p className="text-gray-700 dark:text-gray-300">
                   Our AI analysis has detected potential policy violations in your content.
                 </p>
                 {analysisDetails && (
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
-                    <h3 className="font-medium text-gray-900 dark:text-gray-200 mb-2">Analysis Details:</h3>
-                    <ul className="space-y-1 text-sm">
-                      <li><span className="font-medium">Reason:</span> {analysisDetails.reason}</li>
-                      <li><span className="font-medium">Category:</span> {analysisDetails.category}</li>
-                      <li><span className="font-medium">Confidence:</span> {(analysisDetails.confidence * 100).toFixed(2)}%</li>
-                    </ul>
-                  </div>
+                  <Alert className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+                    <AlertTitle className="text-red-800 dark:text-red-300">Analysis Details</AlertTitle>
+                    <AlertDescription className="space-y-2 text-red-700 dark:text-red-400">
+                      <div><span className="font-medium">Reason:</span> {analysisDetails.reason}</div>
+                      <div><span className="font-medium">Category:</span> {analysisDetails.category}</div>
+                      <div><span className="font-medium">Confidence:</span> {(analysisDetails.confidence * 100).toFixed(2)}%</div>
+                      {analysisDetails.aiResponse && (
+                        <div className="mt-2 text-sm border-l-2 border-red-300 dark:border-red-700 pl-3 italic">
+                          {analysisDetails.aiResponse.substring(0, 250)}
+                          {analysisDetails.aiResponse.length > 250 ? "..." : ""}
+                        </div>
+                      )}
+                    </AlertDescription>
+                  </Alert>
                 )}
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate('/dashboard/reports')}
-                >
-                  View Report
-                </Button>
+                <div className="flex justify-end">
+                  <Button 
+                    className="flex items-center gap-2"
+                    onClick={navigateToReports}
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                    View Full Report
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
