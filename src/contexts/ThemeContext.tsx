@@ -14,25 +14,32 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<Theme>(() => {
     // Try to load theme from localStorage on initial render
     const savedTheme = localStorage.getItem("theme") as Theme | null;
-    return savedTheme || "light";
+    return savedTheme || "system"; // Default to system theme
   });
 
   // Apply theme whenever it changes
   useEffect(() => {
+    // Save theme to localStorage
     localStorage.setItem("theme", theme);
     
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.classList.toggle('dark', systemTheme === 'dark');
-    } else {
-      document.documentElement.classList.toggle('dark', theme === 'dark');
-    }
+    // Handle system theme and apply appropriate class to document
+    const applyTheme = () => {
+      if (theme === 'system') {
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.classList.toggle('dark', systemTheme === 'dark');
+      } else {
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+      }
+    };
+    
+    // Apply theme immediately
+    applyTheme();
     
     // Listen for system theme changes if in system mode
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
+    const handleChange = () => {
       if (theme === 'system') {
-        document.documentElement.classList.toggle('dark', e.matches);
+        applyTheme();
       }
     };
     
