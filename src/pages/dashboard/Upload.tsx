@@ -1,5 +1,4 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -25,6 +24,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 type ContentType = 'video' | 'image' | 'text';
 type AnalysisResult = 'safe' | 'flagged';
 
+// Create a persistent cache to track analyzed content
+// This will prevent re-analyzing the same content on page refreshes
+const analyzedContentCache = new Map<string, {
+  result: AnalysisResult;
+  analysis: any;
+  timestamp: number;
+}>();
+
+// Calculate a simple hash for content to use as cache key
+const hashContent = (content: string, type: string): string => {
+  // Simple hash function for strings
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return `${type}_${hash}`;
+};
+
 const UploadPage = () => {
   const [url, setUrl] = useState('');
   const [caption, setCaption] = useState('');
@@ -35,13 +54,13 @@ const UploadPage = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [analysisDetails, setAnalysisDetails] = useState<any>(null);
-  const [lastAnalyzedContent, setLastAnalyzedContent] = useState<string | null>(null);
+  const [fileContentValue, setFileContentValue] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast: showToast } = useToast();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
@@ -49,10 +68,28 @@ const UploadPage = () => {
       // Set content type based on file type
       if (selectedFile.type.startsWith('image/')) {
         setContentType('image');
+        
+        // Read image as data URL for analysis
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            setFileContentValue(event.target.result as string);
+          }
+        };
+        reader.readAsDataURL(selectedFile);
       } else if (selectedFile.type.startsWith('video/')) {
         setContentType('video');
       } else if (selectedFile.type === 'text/plain' || selectedFile.type === 'application/json') {
         setContentType('text');
+        
+        // Read text content for analysis
+        try {
+          const text = await selectedFile.text();
+          setFileContentValue(text.substring(0, 5000)); // Limit to 5000 chars
+        } catch (error) {
+          console.error('Error reading text file:', error);
+          setFileContentValue(selectedFile.name);
+        }
       }
       
       // Reset previous analysis when file changes
@@ -62,13 +99,26 @@ const UploadPage = () => {
   };
 
   // Function to analyze content using Gemini API via Supabase Edge Function
-  const analyzeContent = async (contentToAnalyze: string, type: ContentType) => {
+  const analyzeContent = useCallback(async (contentToAnalyze: string, type: ContentType) => {
     try {
-      // Check if we've already analyzed this exact content
-      if (contentToAnalyze === lastAnalyzedContent) {
-        console.log("Content already analyzed, using existing result");
-        return analysisDetails;
+      // Generate a hash key for the content
+      const contentKey = hashContent(contentToAnalyze, type);
+      
+      // Check cache first
+      const cachedResult = analyzedContentCache.get(contentKey);
+      if (cachedResult) {
+        // Only use cache if less than 30 minutes old
+        const isCacheFresh = (Date.now() - cachedResult.timestamp) < 30 * 60 * 1000;
+        
+        if (isCacheFresh) {
+          console.log("Using cached analysis result for content");
+          return cachedResult.analysis;
+        }
+        // Cache is stale, remove it
+        analyzedContentCache.delete(contentKey);
       }
+      
+      console.log(`Analyzing content of type ${type}, content length: ${contentToAnalyze.length}`);
       
       const { data, error } = await supabase.functions.invoke('analyze-content', {
         body: { 
@@ -84,8 +134,12 @@ const UploadPage = () => {
 
       console.log('Analysis response:', data);
       
-      // Store this content as last analyzed to prevent duplicate processing
-      setLastAnalyzedContent(contentToAnalyze);
+      // Store result in cache
+      analyzedContentCache.set(contentKey, {
+        result: data.safe ? 'safe' : 'flagged',
+        analysis: data,
+        timestamp: Date.now()
+      });
       
       return data;
     } catch (err) {
@@ -99,7 +153,7 @@ const UploadPage = () => {
         detailedAnalysis: "The content analysis service is currently unavailable. Please try again later."
       };
     }
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,24 +172,23 @@ const UploadPage = () => {
     
     try {
       // Simulate upload
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       toast.success('Content uploaded successfully');
       setIsUploading(false);
       setIsAnalyzing(true);
       
       // Extract content for analysis
       let contentToAnalyze = caption;
+      
+      // If caption is empty, use file content or URL
       if (!contentToAnalyze) {
-        contentToAnalyze = url || file?.name || 'Sample content for analysis';
-        
-        // If it's a text file, try to read its content
-        if (file && contentType === 'text') {
-          try {
-            const text = await file.text();
-            contentToAnalyze = text.substring(0, 5000); // Limit to 5000 chars
-          } catch (error) {
-            console.error('Error reading text file:', error);
-          }
+        if (fileContentValue) {
+          // If we have read file content, use that
+          contentToAnalyze = fileContentValue;
+        } else if (file) {
+          contentToAnalyze = file.name || 'Sample content for analysis';
+        } else {
+          contentToAnalyze = url || 'Sample content for analysis';
         }
       }
       
@@ -156,15 +209,14 @@ const UploadPage = () => {
       
       // Create a thumbnail URL based on content type
       let thumbnailUrl = '';
-      if (file) {
-        if (contentType === 'image') {
-          thumbnailUrl = URL.createObjectURL(file);
-        } else {
-          // Use placeholder images for video and text
-          thumbnailUrl = contentType === 'video' 
-            ? 'https://images.unsplash.com/photo-1649972904349-6e44c42644a7?w=500&h=350&fit=crop'
-            : 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop';
-        }
+      if (file && contentType === 'image' && fileContentValue) {
+        // Use actual image content if available
+        thumbnailUrl = fileContentValue;
+      } else if (file) {
+        // Use placeholder images for video and text
+        thumbnailUrl = contentType === 'video' 
+          ? 'https://images.unsplash.com/photo-1649972904349-6e44c42644a7?w=500&h=350&fit=crop'
+          : 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&h=350&fit=crop';
       } else {
         // Use placeholder images based on content type
         thumbnailUrl = contentType === 'video' 
@@ -217,39 +269,75 @@ const UploadPage = () => {
         
         // If content is flagged, also add to flagged accounts list
         if (finalResult === 'flagged') {
-          const { data: flaggedData, error: flaggedError } = await supabase
-            .from('flagged_accounts')
-            .upsert({
-              user_id: user.id,
-              username: user.email?.split('@')[0] || 'user',
-              email: user.email || 'unknown',
-              last_violation: new Date().toISOString(),
-              status: 'active',
-              violation_type: analysisResult.category || 'policy_violation'
-            }, {
-              onConflict: 'user_id', 
-              ignoreDuplicates: false
-            })
-            .select();
-
-          if (flaggedError) {
-            console.error('Error adding flagged account to database:', flaggedError);
-          } else {
-            console.log('Flagged account added to database:', flaggedData);
+          try {
+            // Check if this account is already flagged
+            const { data: existingFlagged, error: checkError } = await supabase
+              .from('flagged_accounts')
+              .select('*')
+              .eq('email', user.email || '')
+              .maybeSingle();
             
-            const flaggedAccount = {
-              id: flaggedData?.[0]?.id || 'usr-' + Date.now().toString().substring(6),
-              username: user.email?.split('@')[0] || 'current_user',
-              email: user.email || 'current.user@example.com',
-              violations: 1,
-              lastViolation: new Date().toISOString(),
-              status: 'active' as const,
-              violationType: analysisResult.category || 'policy_violation'
-            };
-            
-            if (typeof (window as any).addFlaggedAccount === 'function') {
-              (window as any).addFlaggedAccount(flaggedAccount);
+            if (checkError) {
+              console.error("Error checking for existing flagged account:", checkError);
             }
+            
+            if (existingFlagged) {
+              // Update existing record
+              const { error: updateError } = await supabase
+                .from('flagged_accounts')
+                .update({
+                  violations: (existingFlagged.violations || 0) + 1,
+                  last_violation: new Date().toISOString(),
+                  violation_type: analysisResult.category || existingFlagged.violation_type
+                })
+                .eq('id', existingFlagged.id);
+              
+              if (updateError) {
+                console.error("Error updating flagged account:", updateError);
+              } else {
+                console.log('Account violation count updated');
+              }
+            } else {
+              // Insert new flagged account
+              const newFlaggedAccount = {
+                user_id: user.id,
+                username: user.email?.split('@')[0] || 'user',
+                email: user.email || 'unknown',
+                violations: 1,
+                last_violation: new Date().toISOString(),
+                status: 'active',
+                violation_type: analysisResult.category || 'policy_violation'
+              };
+              
+              const { data: flaggedData, error: insertError } = await supabase
+                .from('flagged_accounts')
+                .insert([newFlaggedAccount])
+                .select();
+              
+              if (insertError) {
+                console.error("Error adding flagged account:", insertError);
+              } else {
+                console.log('Flagged account added to database:', flaggedData);
+                
+                if (flaggedData && flaggedData[0]) {
+                  const flaggedAccount = {
+                    id: flaggedData[0].id,
+                    username: user.email?.split('@')[0] || 'current_user',
+                    email: user.email || 'current.user@example.com',
+                    violations: 1,
+                    lastViolation: new Date().toISOString(),
+                    status: 'active' as const,
+                    violationType: analysisResult.category || 'policy_violation'
+                  };
+                  
+                  if (typeof (window as any).addFlaggedAccount === 'function') {
+                    (window as any).addFlaggedAccount(flaggedAccount);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error flagging account:', error);
           }
         }
         
@@ -277,9 +365,9 @@ const UploadPage = () => {
     setHashtags('');
     setContentType('video');
     setFile(null);
+    setFileContentValue(null);
     setResult(null);
     setAnalysisDetails(null);
-    setLastAnalyzedContent(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
@@ -42,7 +41,6 @@ import {
   AlarmClock, 
   AlertCircle, 
   CheckCircle2, 
-  Download, 
   Trash2, 
   FileText,
   Loader2,
@@ -161,6 +159,7 @@ const ReportsPage = () => {
   const handleDeleteReport = async (reportId: string) => {
     try {
       setIsLoading(true);
+      console.log('Deleting report with ID:', reportId);
       
       // Delete the report from Supabase
       const { error } = await supabase
@@ -169,8 +168,11 @@ const ReportsPage = () => {
         .eq('id', reportId);
       
       if (error) {
+        console.error('Error from Supabase when deleting report:', error);
         throw error;
       }
+      
+      console.log('Report deleted successfully from database');
       
       // Remove report from local state to reflect deletion
       setReports(prevReports => prevReports.filter(report => report.id !== reportId));

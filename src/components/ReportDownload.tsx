@@ -39,7 +39,10 @@ const ReportDownload = ({ reportData, filename }: ReportProps) => {
     const generateDetailedExplanation = () => {
       // If we have a detailed analysis from AI, use that
       if (reportData.aiAnalysis?.detailedAnalysis) {
-        return reportData.aiAnalysis.detailedAnalysis.replace(/\*\*/g, '');
+        // Clean up markdown formatting if needed
+        return reportData.aiAnalysis.detailedAnalysis
+          .replace(/\*\*/g, '') // Remove markdown bold
+          .replace(/^#{1,6}\s+/gm, ''); // Remove markdown headers
       }
       
       if (reportData.status === 'safe') {

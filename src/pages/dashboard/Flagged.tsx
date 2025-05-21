@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
@@ -136,34 +135,44 @@ const FlaggedPage = () => {
   
   const handleDeleteAccount = async (id: string) => {
     try {
+      setIsLoading(true);
+      console.log('Deleting flagged account with ID:', id);
+      
       const { error } = await supabase
         .from('flagged_accounts')
         .delete()
         .eq('id', id);
       
       if (error) {
+        console.error('Error deleting flagged account from database:', error);
         throw error;
       }
       
+      console.log('Flagged account deleted successfully from database');
       setFlaggedAccounts(flaggedAccounts.filter(account => account.id !== id));
       toast.success("Account removed from flagged list");
     } catch (error) {
       console.error('Error deleting flagged account:', error);
       toast.error('Failed to delete account');
+    } finally {
+      setIsLoading(false);
     }
   };
   
   const handleUpdateStatus = async (id: string, status: 'active' | 'suspended' | 'banned') => {
     try {
+      console.log(`Updating account ${id} to status: ${status}`);
       const { error } = await supabase
         .from('flagged_accounts')
         .update({ status })
         .eq('id', id);
       
       if (error) {
+        console.error('Error updating account status in database:', error);
         throw error;
       }
       
+      console.log('Account status updated successfully in database');
       setFlaggedAccounts(flaggedAccounts.map(account => 
         account.id === id ? { ...account, status } : account
       ));

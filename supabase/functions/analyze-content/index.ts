@@ -37,6 +37,7 @@ serve(async (req) => {
     let requestBody: RequestBody;
     try {
       requestBody = await req.json() as RequestBody;
+      console.log(`Received content for analysis: ${requestBody.contentType}, content length: ${requestBody.content?.length || 0}`);
     } catch (error) {
       console.error("Error parsing request body:", error);
       return new Response(
@@ -106,6 +107,7 @@ serve(async (req) => {
         if (content.startsWith("http")) {
           // Process image URL
           try {
+            console.log("Processing image URL:", content.substring(0, 50) + "...");
             const imageResponse = await fetch(content);
             if (!imageResponse.ok) {
               throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
@@ -140,6 +142,7 @@ serve(async (req) => {
         } else if (content.startsWith("data:image")) {
           // Process base64 data URL
           try {
+            console.log("Processing base64 image data");
             const base64Image = content.split(',')[1];
             if (!base64Image) {
               throw new Error("Invalid base64 image format");
@@ -170,6 +173,7 @@ serve(async (req) => {
           }
         } else {
           // Fallback for text description
+          console.log("No valid image format detected, processing as text description");
           geminiPayload = {
             contents: [{
               parts: [
@@ -185,6 +189,7 @@ serve(async (req) => {
         }
       } else {
         // For text and other content types
+        console.log("Processing as text content");
         geminiPayload = {
           contents: [{
             parts: [
@@ -242,6 +247,13 @@ serve(async (req) => {
         const reasonMatch = aiResponse.match(/because (.+?)[.!?]/i);
         if (reasonMatch) {
           reason = reasonMatch[1].trim();
+        } else if (aiResponse.toLowerCase().includes("issue")) {
+          const issueMatch = aiResponse.match(/issue[s]?:?\s+(.+?)[.!?]/i);
+          if (issueMatch) {
+            reason = issueMatch[1].trim();
+          } else {
+            reason = "Potential policy violation detected";
+          }
         } else {
           reason = "Potential policy violation detected";
         }
@@ -249,13 +261,14 @@ serve(async (req) => {
 
       // Extract a more detailed analysis
       let detailedAnalysis = extractDetailedAnalysis(aiResponse);
+      console.log("Extracted detailed analysis:", detailedAnalysis.substring(0, 100) + "...");
 
       // Create a structured analysis response
       const analysisResult: AnalysisResult = {
         safe: isSafe,
         reason: isSafe ? "Content appears to be safe" : reason,
-        category: isSafe ? "safe" : "policy_violation",
-        confidence: isSafe ? 0.9 : 0.8,
+        category: determineCategoryFromAnalysis(aiResponse, contentType, isSafe),
+        confidence: calculateConfidence(aiResponse, isSafe),
         aiResponse: aiResponse,
         detailedAnalysis: detailedAnalysis
       };
@@ -311,6 +324,47 @@ function extractDetailedAnalysis(aiResponse: string): string {
   }
   
   return structuredAnalysis;
+}
+
+// New helper function to determine category more accurately
+function determineCategoryFromAnalysis(aiResponse: string, contentType: string, isSafe: boolean): string {
+  if (isSafe) return "safe";
+  
+  const lowerResponse = aiResponse.toLowerCase();
+  
+  // Check for explicit mentions of category types
+  if (lowerResponse.includes("violence") || lowerResponse.includes("graphic") || lowerResponse.includes("harmful")) {
+    return `${contentType}_policy_violation`;
+  } else if (lowerResponse.includes("sexual") || lowerResponse.includes("explicit") || lowerResponse.includes("adult")) {
+    return `${contentType}_adult_content`;
+  } else if (lowerResponse.includes("hate") || lowerResponse.includes("discriminat") || lowerResponse.includes("offensive")) {
+    return `${contentType}_hate_speech`;
+  }
+  
+  // Default to content type specific violation
+  return `${contentType}_policy_violation`;
+}
+
+// New helper function to better calculate confidence
+function calculateConfidence(aiResponse: string, isSafe: boolean): number {
+  const lowerResponse = aiResponse.toLowerCase();
+  
+  // Look for confidence indicators in the text
+  let confidence = isSafe ? 0.8 : 0.75; // Base confidence levels
+  
+  // Adjust based on certainty language
+  if (lowerResponse.includes("definitely") || lowerResponse.includes("certainly") || lowerResponse.includes("clearly")) {
+    confidence += 0.15;
+  } else if (lowerResponse.includes("likely") || lowerResponse.includes("probably")) {
+    confidence += 0.05;
+  } else if (lowerResponse.includes("possibly") || lowerResponse.includes("might") || lowerResponse.includes("could be")) {
+    confidence -= 0.1;
+  } else if (lowerResponse.includes("uncertain") || lowerResponse.includes("unclear")) {
+    confidence -= 0.2;
+  }
+  
+  // Ensure confidence is within bounds
+  return Math.max(0.5, Math.min(0.99, confidence));
 }
 
 // Helper function to create mock analysis responses when the API is unavailable
