@@ -14,6 +14,7 @@ type ReportProps = {
       reason: string;
       category: string;
       confidence: number;
+      detailedAnalysis?: string;
     };
   };
   filename: string;
@@ -36,6 +37,11 @@ const ReportDownload = ({ reportData, filename }: ReportProps) => {
 
     // Generate detailed explanation based on content type and violation category
     const generateDetailedExplanation = () => {
+      // If we have a detailed analysis from AI, use that
+      if (reportData.aiAnalysis?.detailedAnalysis) {
+        return reportData.aiAnalysis.detailedAnalysis.replace(/\*\*/g, '');
+      }
+      
       if (reportData.status === 'safe') {
         return 'This content complies with our community guidelines and has been marked safe.';
       }
@@ -92,14 +98,14 @@ Content Type: ${reportData.contentType}
 Uploaded By: ${reportData.user}
 Upload Time: ${formatDate(reportData.uploadTime)}
 
-AI ANALYSIS:
------------
+AI ANALYSIS SUMMARY:
+------------------
 Category: ${reportData.aiAnalysis.category || 'Unknown'}
 Confidence: ${confidencePercentage}%
 Reason: ${reportData.aiAnalysis.reason || 'No reason provided'}
 
-VIOLATION EXPLANATION:
---------------------
+DETAILED ANALYSIS:
+----------------
 ${detailedExplanation}
 
 RECOMMENDATIONS:

@@ -16,6 +16,7 @@ interface AnalysisResult {
   category: string;
   confidence: number;
   aiResponse?: string;
+  detailedAnalysis?: string;
 }
 
 serve(async (req) => {
@@ -79,7 +80,11 @@ serve(async (req) => {
     // Continue with normal API call if API key is present
     try {
       // Create the appropriate prompt based on content type
-      let prompt = "Analyze this content for potential policy violations or inappropriate material. ";
+      let prompt = "Analyze this content for potential policy violations or inappropriate material and provide a detailed analysis with the following structure: \n\n";
+      prompt += "1. Overall Assessment: Is this content safe or potentially violating policies?\n";
+      prompt += "2. Specific Issues: List any specific issues found or confirm no issues were identified.\n";
+      prompt += "3. Reasoning: Explain your reasoning in detail, including context and nuance.\n";
+      prompt += "4. Recommendations: Provide specific recommendations for this content.\n\n";
 
       if (contentType === "image") {
         prompt += "This is an image. Focus on visual elements that might be concerning.";
@@ -242,6 +247,9 @@ serve(async (req) => {
         }
       }
 
+      // Extract a more detailed analysis
+      let detailedAnalysis = extractDetailedAnalysis(aiResponse);
+
       // Create a structured analysis response
       const analysisResult: AnalysisResult = {
         safe: isSafe,
@@ -249,6 +257,7 @@ serve(async (req) => {
         category: isSafe ? "safe" : "policy_violation",
         confidence: isSafe ? 0.9 : 0.8,
         aiResponse: aiResponse,
+        detailedAnalysis: detailedAnalysis
       };
 
       console.log("Analysis complete, returning result");
@@ -275,6 +284,35 @@ serve(async (req) => {
   }
 });
 
+// Helper function to extract detailed analysis from AI response
+function extractDetailedAnalysis(aiResponse: string): string {
+  // Try to structure the response in a readable format
+  const sections = [
+    { title: "Overall Assessment", regex: /overall assessment[:\s]*(.*?)(specific issues|reasoning|recommendations|\d+\.|\n\n|$)/is },
+    { title: "Specific Issues", regex: /specific issues[:\s]*(.*?)(overall assessment|reasoning|recommendations|\d+\.|\n\n|$)/is },
+    { title: "Reasoning", regex: /reasoning[:\s]*(.*?)(overall assessment|specific issues|recommendations|\d+\.|\n\n|$)/is },
+    { title: "Recommendations", regex: /recommendations[:\s]*(.*?)(overall assessment|specific issues|reasoning|\d+\.|\n\n|$)/is }
+  ];
+  
+  let structuredAnalysis = "";
+  
+  for (const section of sections) {
+    const match = aiResponse.match(section.regex);
+    if (match && match[1]) {
+      structuredAnalysis += `**${section.title}**: ${match[1].trim()}\n\n`;
+    }
+  }
+  
+  // If structured parsing didn't work, return a cleaned version of the full analysis
+  if (!structuredAnalysis) {
+    return aiResponse
+      .replace(/^\d+\.\s*/gm, '') // Remove numbering
+      .replace(/\n{3,}/g, '\n\n'); // Normalize spacing
+  }
+  
+  return structuredAnalysis;
+}
+
 // Helper function to create mock analysis responses when the API is unavailable
 function createMockAnalysis(content: string, contentType: "video" | "image" | "text"): AnalysisResult {
   // Generate a deterministic but seemingly random safe/unsafe result
@@ -286,22 +324,39 @@ function createMockAnalysis(content: string, contentType: "video" | "image" | "t
   const isSafe = Math.abs(contentHash) % 5 !== 0; // 80% chance of being safe
   
   // Create different responses based on content type
-  let reason, category, confidence;
+  let reason, category, confidence, detailedAnalysis;
   
   if (isSafe) {
     reason = "Content appears to be safe";
     category = "safe";
     confidence = 0.85 + (Math.abs(contentHash) % 15) / 100; // Between 0.85 and 0.99
+    
+    detailedAnalysis = `**Overall Assessment**: The content appears to be safe and does not violate any content policies.\n\n` +
+                       `**Specific Issues**: No issues were identified in this content.\n\n` +
+                       `**Reasoning**: After reviewing the ${contentType}, I found no elements that would violate platform policies. The content is appropriate for general audiences.\n\n` +
+                       `**Recommendations**: This content can be safely published without any modifications.`;
   } else {
     if (contentType === "image") {
       reason = "Image may contain inappropriate visual elements";
       category = "visual_policy_violation";
+      detailedAnalysis = `**Overall Assessment**: This image appears to contain content that may violate platform policies.\n\n` +
+                         `**Specific Issues**: Potentially inappropriate visual elements that may not be suitable for all audiences.\n\n` +
+                         `**Reasoning**: The visual content contains elements that could be interpreted as violating community standards, specifically related to inappropriate imagery.\n\n` +
+                         `**Recommendations**: Review the image manually before publication or consider using a different image.`;
     } else if (contentType === "video") {
       reason = "Video may contain concerning scenes or content";
       category = "video_policy_violation";
+      detailedAnalysis = `**Overall Assessment**: This video may contain content that violates platform policies.\n\n` +
+                         `**Specific Issues**: Potentially concerning scenes or sequences that may not be appropriate for general viewing.\n\n` +
+                         `**Reasoning**: Certain segments of this video contain elements that could be interpreted as violating community guidelines.\n\n` +
+                         `**Recommendations**: Review the video manually, particularly at key segments, or consider editing before publication.`;
     } else {
       reason = "Text may contain potentially harmful language";
       category = "text_policy_violation";
+      detailedAnalysis = `**Overall Assessment**: This text contains potentially harmful language that may violate platform policies.\n\n` +
+                         `**Specific Issues**: Language that could be interpreted as inappropriate or harmful to certain audiences.\n\n` +
+                         `**Reasoning**: The text includes phrases or terms that could violate community guidelines around respectful communication.\n\n` +
+                         `**Recommendations**: Consider revising the language used in this content before publication.`;
     }
     confidence = 0.65 + (Math.abs(contentHash) % 20) / 100; // Between 0.65 and 0.84
   }
@@ -311,6 +366,7 @@ function createMockAnalysis(content: string, contentType: "video" | "image" | "t
     reason,
     category,
     confidence,
-    aiResponse: `Mock analysis: ${reason}. This is a fallback response as the AI service is currently unavailable.`
+    aiResponse: `Mock analysis: ${reason}. This is a fallback response as the AI service is currently unavailable.`,
+    detailedAnalysis
   };
 }

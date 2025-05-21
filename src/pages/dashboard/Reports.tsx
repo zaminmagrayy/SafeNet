@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
@@ -59,6 +60,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Report type definition
 type Report = {
@@ -72,6 +74,7 @@ type Report = {
     reason: string;
     category: string;
     confidence: number;
+    detailedAnalysis?: string;
   };
 };
 
@@ -110,7 +113,8 @@ const ReportsPage = () => {
           aiAnalysis: {
             reason: report.ai_analysis?.reason || 'No reason provided',
             category: report.ai_analysis?.category || 'unknown',
-            confidence: report.ai_analysis?.confidence || 0.5
+            confidence: report.ai_analysis?.confidence || 0.5,
+            detailedAnalysis: report.ai_analysis?.detailedAnalysis || ''
           }
         }));
         
@@ -131,7 +135,12 @@ const ReportsPage = () => {
   
   // Function to add a new report (exposed to Upload component)
   const addReportToList = (newReport: Report) => {
-    setReports(prev => [newReport, ...prev]);
+    // Check if the report already exists in the list to prevent duplicates
+    const reportExists = reports.some(report => report.id === newReport.id);
+    
+    if (!reportExists) {
+      setReports(prev => [newReport, ...prev]);
+    }
   };
   
   // Expose the function to window for Upload component
@@ -141,7 +150,7 @@ const ReportsPage = () => {
     return () => {
       delete (window as any).addReportToList;
     };
-  }, []);
+  }, [reports]);
   
   // Filter reports based on current filter
   const filteredReports = reports.filter(report => {
@@ -198,17 +207,48 @@ const ReportsPage = () => {
 
         console.log("Flagging account with data:", newFlaggedAccount);
 
-        // Insert the flagged account into Supabase
-        const { data, error } = await supabase
+        // Check if this account is already flagged
+        const { data: existingFlagged, error: checkError } = await supabase
           .from('flagged_accounts')
-          .insert([newFlaggedAccount]);
-
-        if (error) {
-          console.error("Supabase error details:", error);
-          throw error;
+          .select('*')
+          .eq('user_id', user?.id || '')
+          .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
+          console.error("Error checking for existing flagged account:", checkError);
+          throw checkError;
         }
-
-        toast.success('Account has been flagged and added to the flagged accounts list');
+        
+        if (existingFlagged) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('flagged_accounts')
+            .update({
+              violations: (existingFlagged.violations || 0) + 1,
+              last_violation: new Date().toISOString(),
+              violation_type: report.aiAnalysis?.category || existingFlagged.violation_type
+            })
+            .eq('id', existingFlagged.id);
+          
+          if (updateError) {
+            console.error("Error updating flagged account:", updateError);
+            throw updateError;
+          }
+          
+          toast.success('Account violation count updated');
+        } else {
+          // Insert new flagged account
+          const { error } = await supabase
+            .from('flagged_accounts')
+            .insert([newFlaggedAccount]);
+  
+          if (error) {
+            console.error("Supabase error details:", error);
+            throw error;
+          }
+  
+          toast.success('Account has been flagged and added to the flagged accounts list');
+        }
       } catch (error) {
         console.error('Error flagging account:', error);
         toast.error('Failed to flag account');
@@ -386,7 +426,7 @@ const ReportsPage = () => {
 
       {/* Details Dialog */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent className="sm:max-w-[700px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Report Details</DialogTitle>
             <DialogDescription>
@@ -404,65 +444,96 @@ const ReportsPage = () => {
                 />
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium">Report Information</h3>
-                  <Badge variant={selectedReport.status === 'flagged' ? 'destructive' : 'secondary'}>
-                    {selectedReport.status === 'flagged' ? 'Flagged' : 'Safe'}
-                  </Badge>
-                </div>
+              <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                  <TabsTrigger value="detailed">Detailed Analysis</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="basic" className="space-y-4 pt-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium">Report Information</h3>
+                    <Badge variant={selectedReport.status === 'flagged' ? 'destructive' : 'secondary'}>
+                      {selectedReport.status === 'flagged' ? 'Flagged' : 'Safe'}
+                    </Badge>
+                  </div>
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[180px]">Property</TableHead>
-                      <TableHead>Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-medium">Report ID</TableCell>
-                      <TableCell>{selectedReport.id}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">Content Type</TableCell>
-                      <TableCell className="capitalize">{selectedReport.contentType}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">Upload Time</TableCell>
-                      <TableCell>{formatDate(selectedReport.uploadTime)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">User</TableCell>
-                      <TableCell>{selectedReport.user}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[180px]">Property</TableHead>
+                        <TableHead>Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium">Report ID</TableCell>
+                        <TableCell>{selectedReport.id}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Content Type</TableCell>
+                        <TableCell className="capitalize">{selectedReport.contentType}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Upload Time</TableCell>
+                        <TableCell>{formatDate(selectedReport.uploadTime)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">User</TableCell>
+                        <TableCell>{selectedReport.user}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
 
-                <h3 className="text-lg font-medium pt-4">AI Analysis</h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[180px]">Property</TableHead>
-                      <TableHead>Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-medium">Reason</TableCell>
-                      <TableCell>{selectedReport.aiAnalysis?.reason || 'No reason provided'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">Category</TableCell>
-                      <TableCell>{selectedReport.aiAnalysis?.category || 'Unknown'}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">Confidence</TableCell>
-                      <TableCell>{((selectedReport.aiAnalysis?.confidence || 0) * 100).toFixed(1)}%</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
+                  <h3 className="text-lg font-medium pt-4">AI Analysis Summary</h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[180px]">Property</TableHead>
+                        <TableHead>Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium">Reason</TableCell>
+                        <TableCell>{selectedReport.aiAnalysis?.reason || 'No reason provided'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Category</TableCell>
+                        <TableCell>{selectedReport.aiAnalysis?.category || 'Unknown'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Confidence</TableCell>
+                        <TableCell>{((selectedReport.aiAnalysis?.confidence || 0) * 100).toFixed(1)}%</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+                
+                <TabsContent value="detailed" className="pt-4">
+                  {selectedReport.aiAnalysis?.detailedAnalysis ? (
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      {selectedReport.aiAnalysis.detailedAnalysis.split('\n\n').map((paragraph, index) => (
+                        <div key={index} className="mb-4">
+                          {paragraph.startsWith('**') ? (
+                            <div>
+                              <h4 className="font-bold mb-1">{paragraph.split('**:')[0].replace(/\*\*/g, '')}</h4>
+                              <p>{paragraph.split('**:')[1]?.trim()}</p>
+                            </div>
+                          ) : (
+                            <p>{paragraph}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                      <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No detailed analysis is available for this report</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
           )}
 

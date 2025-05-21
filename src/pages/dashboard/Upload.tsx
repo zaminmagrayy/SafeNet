@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { 
   Card, 
@@ -19,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type ContentType = 'video' | 'image' | 'text';
 type AnalysisResult = 'safe' | 'flagged';
@@ -33,6 +35,7 @@ const UploadPage = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [analysisDetails, setAnalysisDetails] = useState<any>(null);
+  const [lastAnalyzedContent, setLastAnalyzedContent] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -51,12 +54,22 @@ const UploadPage = () => {
       } else if (selectedFile.type === 'text/plain' || selectedFile.type === 'application/json') {
         setContentType('text');
       }
+      
+      // Reset previous analysis when file changes
+      setResult(null);
+      setAnalysisDetails(null);
     }
   };
 
   // Function to analyze content using Gemini API via Supabase Edge Function
   const analyzeContent = async (contentToAnalyze: string, type: ContentType) => {
     try {
+      // Check if we've already analyzed this exact content
+      if (contentToAnalyze === lastAnalyzedContent) {
+        console.log("Content already analyzed, using existing result");
+        return analysisDetails;
+      }
+      
       const { data, error } = await supabase.functions.invoke('analyze-content', {
         body: { 
           content: contentToAnalyze,
@@ -70,6 +83,10 @@ const UploadPage = () => {
       }
 
       console.log('Analysis response:', data);
+      
+      // Store this content as last analyzed to prevent duplicate processing
+      setLastAnalyzedContent(contentToAnalyze);
+      
       return data;
     } catch (err) {
       console.error('Error in analyzeContent:', err);
@@ -78,7 +95,8 @@ const UploadPage = () => {
         safe: false,
         reason: "Unable to analyze content - service unavailable",
         category: "error",
-        confidence: 0.5
+        confidence: 0.5,
+        detailedAnalysis: "The content analysis service is currently unavailable. Please try again later."
       };
     }
   };
@@ -187,7 +205,8 @@ const UploadPage = () => {
           aiAnalysis: {
             reason: analysisResult.reason || 'No specific reason provided',
             category: analysisResult.category || 'unknown',
-            confidence: analysisResult.confidence || 0.5
+            confidence: analysisResult.confidence || 0.5,
+            detailedAnalysis: analysisResult.detailedAnalysis || ''
           }
         };
         
@@ -232,21 +251,16 @@ const UploadPage = () => {
               (window as any).addFlaggedAccount(flaggedAccount);
             }
           }
-          
-          // Show a toast notification instead of navigating
-          showToast({
-            title: "Content Analysis Complete",
-            description: "Your content was flagged for potential policy violations. View the full report in the Moderation Reports tab.",
-            variant: "destructive",
-          });
-        } else {
-          // Show a success toast for safe content
-          showToast({
-            title: "Content Analysis Complete",
-            description: "Your content has been analyzed and marked as safe. A report is available in the Moderation Reports tab.",
-            variant: "default",
-          });
         }
+        
+        // Show a centered notification toast
+        showToast({
+          title: finalResult === 'flagged' ? "Content Flagged" : "Content Analysis Complete",
+          description: finalResult === 'flagged' 
+            ? "Your content was flagged for potential policy violations. View the full report in the Moderation Reports tab." 
+            : "Your content has been analyzed and marked as safe. A report is available in the Moderation Reports tab.",
+          variant: finalResult === 'flagged' ? "destructive" : "default",
+        });
       }
       
     } catch (error) {
@@ -265,14 +279,10 @@ const UploadPage = () => {
     setFile(null);
     setResult(null);
     setAnalysisDetails(null);
+    setLastAnalyzedContent(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  // Create a function to navigate to reports
-  const navigateToReports = () => {
-    navigate('/dashboard/reports');
   };
 
   return (
@@ -295,7 +305,14 @@ const UploadPage = () => {
                 id="url"
                 placeholder="https://example.com/video.mp4"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  // Reset previous analysis when URL changes
+                  if (result) {
+                    setResult(null);
+                    setAnalysisDetails(null);
+                  }
+                }}
                 disabled={!!file || isUploading || isAnalyzing}
               />
               <p className="text-sm text-gray-500 dark:text-gray-400">Enter URL from YouTube, Instagram, or Facebook</p>
@@ -323,6 +340,8 @@ const UploadPage = () => {
                       size="sm"
                       onClick={() => {
                         setFile(null);
+                        setResult(null);
+                        setAnalysisDetails(null);
                         if (fileInputRef.current) fileInputRef.current.value = '';
                       }}
                       className="mt-2"
@@ -352,7 +371,13 @@ const UploadPage = () => {
                 id="caption"
                 placeholder="Add a caption for your content"
                 value={caption}
-                onChange={(e) => setCaption(e.target.value)}
+                onChange={(e) => {
+                  setCaption(e.target.value);
+                  if (result) {
+                    setResult(null);
+                    setAnalysisDetails(null);
+                  }
+                }}
                 disabled={isUploading || isAnalyzing}
               />
             </div>
@@ -372,7 +397,13 @@ const UploadPage = () => {
               <Label>Content Type</Label>
               <RadioGroup
                 value={contentType}
-                onValueChange={(value) => setContentType(value as ContentType)}
+                onValueChange={(value) => {
+                  setContentType(value as ContentType);
+                  if (result) {
+                    setResult(null);
+                    setAnalysisDetails(null);
+                  }
+                }}
                 className="flex gap-4"
                 disabled={isUploading || isAnalyzing}
               >
@@ -403,7 +434,7 @@ const UploadPage = () => {
             </Button>
             <Button
               type="submit"
-              disabled={(!url && !file) || isUploading || isAnalyzing}
+              disabled={(!url && !file) || isUploading || isAnalyzing || !!result}
             >
               {isUploading ? (
                 <>
@@ -415,6 +446,8 @@ const UploadPage = () => {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Analyzing...
                 </>
+              ) : result ? (
+                'Already Analyzed'
               ) : (
                 'Analyze Content'
               )}
@@ -450,59 +483,92 @@ const UploadPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
-            {result === 'safe' ? (
-              <div className="space-y-4">
-                <p className="text-gray-700 dark:text-gray-300">
-                  Our AI analysis indicates that your content is safe for our platform.
-                  The content has been processed and can now be published.
-                </p>
-                {analysisDetails && (
-                  <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-                    <AlertTitle className="text-green-800 dark:text-green-300">AI Analysis Results</AlertTitle>
-                    <AlertDescription className="text-green-700 dark:text-green-400">
-                      {analysisDetails.reason || "No specific issues were found in your content."}
-                      {analysisDetails.aiResponse && (
-                        <div className="mt-2 text-sm border-l-2 border-green-300 dark:border-green-700 pl-3 italic">
-                          {analysisDetails.aiResponse.substring(0, 200)}
-                          {analysisDetails.aiResponse.length > 200 ? "..." : ""}
-                        </div>
-                      )}
-                    </AlertDescription>
-                  </Alert>
+            {/* Create tabs for Analysis Summary and Detailed Analysis */}
+            <Tabs defaultValue="summary" className="w-full">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="summary">Analysis Summary</TabsTrigger>
+                <TabsTrigger value="detailed">Detailed Analysis</TabsTrigger>
+              </TabsList>
+              <TabsContent value="summary" className="mt-4">
+                {result === 'safe' ? (
+                  <div className="space-y-4">
+                    <p className="text-gray-700 dark:text-gray-300">
+                      Our AI analysis indicates that your content is safe for our platform.
+                      The content has been processed and can now be published.
+                    </p>
+                    {analysisDetails && (
+                      <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                        <AlertTitle className="text-green-800 dark:text-green-300">AI Analysis Results</AlertTitle>
+                        <AlertDescription className="text-green-700 dark:text-green-400">
+                          {analysisDetails.reason || "No specific issues were found in your content."}
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-sm font-semibold">Confidence: {(analysisDetails.confidence * 100).toFixed(1)}%</span>
+                            <span className="text-sm">Category: {analysisDetails.category || "safe"}</span>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-gray-700 dark:text-gray-300">
+                      Our AI analysis has detected potential policy violations in your content.
+                    </p>
+                    {analysisDetails && (
+                      <Alert className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+                        <AlertTitle className="text-red-800 dark:text-red-300">Analysis Details</AlertTitle>
+                        <AlertDescription className="space-y-2 text-red-700 dark:text-red-400">
+                          <div><span className="font-medium">Reason:</span> {analysisDetails.reason}</div>
+                          <div><span className="font-medium">Category:</span> {analysisDetails.category}</div>
+                          <div><span className="font-medium">Confidence:</span> {(analysisDetails.confidence * 100).toFixed(1)}%</div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
                 )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-gray-700 dark:text-gray-300">
-                  Our AI analysis has detected potential policy violations in your content.
-                </p>
-                {analysisDetails && (
-                  <Alert className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-                    <AlertTitle className="text-red-800 dark:text-red-300">Analysis Details</AlertTitle>
-                    <AlertDescription className="space-y-2 text-red-700 dark:text-red-400">
-                      <div><span className="font-medium">Reason:</span> {analysisDetails.reason}</div>
-                      <div><span className="font-medium">Category:</span> {analysisDetails.category}</div>
-                      <div><span className="font-medium">Confidence:</span> {(analysisDetails.confidence * 100).toFixed(2)}%</div>
-                      {analysisDetails.aiResponse && (
-                        <div className="mt-2 text-sm border-l-2 border-red-300 dark:border-red-700 pl-3 italic">
-                          {analysisDetails.aiResponse.substring(0, 250)}
-                          {analysisDetails.aiResponse.length > 250 ? "..." : ""}
-                        </div>
-                      )}
-                    </AlertDescription>
-                  </Alert>
+              </TabsContent>
+              <TabsContent value="detailed" className="mt-4">
+                {analysisDetails && analysisDetails.detailedAnalysis ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    {analysisDetails.detailedAnalysis.split('\n\n').map((paragraph: string, index: number) => (
+                      <div key={index} className="mb-4">
+                        {paragraph.startsWith('**') ? (
+                          <div>
+                            <h4 className="font-bold mb-1">{paragraph.split('**:')[0].replace(/\*\*/g, '')}</h4>
+                            <p>{paragraph.split('**:')[1]?.trim()}</p>
+                          </div>
+                        ) : (
+                          <p>{paragraph}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-gray-500 dark:text-gray-400 italic">
+                    No detailed analysis available for this content.
+                  </div>
                 )}
-                <div className="flex justify-end">
-                  <Button 
-                    className="flex items-center gap-2"
-                    onClick={navigateToReports}
-                  >
-                    <BarChart3 className="h-4 w-4" />
-                    View Full Report
-                  </Button>
-                </div>
-              </div>
-            )}
+                {analysisDetails && analysisDetails.aiResponse && !analysisDetails.detailedAnalysis && (
+                  <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-md">
+                    <h4 className="text-sm font-semibold mb-2">AI Response</h4>
+                    <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                      {analysisDetails.aiResponse}
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+            
+            <div className="flex justify-end">
+              <Button 
+                className="flex items-center gap-2"
+                variant="outline"
+                onClick={() => navigate('/dashboard/reports')}
+              >
+                <BarChart3 className="h-4 w-4" />
+                View Full Report
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
