@@ -299,7 +299,7 @@ serve(async (req) => {
 
 // Helper function to extract detailed analysis from AI response
 function extractDetailedAnalysis(aiResponse: string): string {
-  // Try to structure the response in a readable format
+  // Try to structure the response in a clear format
   const sections = [
     { title: "Overall Assessment", regex: /overall assessment[:\s]*(.*?)(specific issues|reasoning|recommendations|\d+\.|\n\n|$)/is },
     { title: "Specific Issues", regex: /specific issues[:\s]*(.*?)(overall assessment|reasoning|recommendations|\d+\.|\n\n|$)/is },
@@ -309,10 +309,19 @@ function extractDetailedAnalysis(aiResponse: string): string {
   
   let structuredAnalysis = "";
   
+  // Try to extract each section from the AI response
   for (const section of sections) {
     const match = aiResponse.match(section.regex);
     if (match && match[1]) {
-      structuredAnalysis += `**${section.title}**: ${match[1].trim()}\n\n`;
+      const content = match[1].trim();
+      if (content) {
+        structuredAnalysis += `**${section.title}**: ${content}\n\n`;
+      } else {
+        structuredAnalysis += `**${section.title}**: No ${section.title.toLowerCase()} provided.\n\n`;
+      }
+    } else {
+      // If section not found, add a placeholder
+      structuredAnalysis += `**${section.title}**: No ${section.title.toLowerCase()} provided.\n\n`;
     }
   }
   
@@ -326,7 +335,7 @@ function extractDetailedAnalysis(aiResponse: string): string {
   return structuredAnalysis;
 }
 
-// New helper function to determine category more accurately
+// Helper function to determine category more accurately
 function determineCategoryFromAnalysis(aiResponse: string, contentType: string, isSafe: boolean): string {
   if (isSafe) return "safe";
   
@@ -345,7 +354,7 @@ function determineCategoryFromAnalysis(aiResponse: string, contentType: string, 
   return `${contentType}_policy_violation`;
 }
 
-// New helper function to better calculate confidence
+// Helper function to better calculate confidence
 function calculateConfidence(aiResponse: string, isSafe: boolean): number {
   const lowerResponse = aiResponse.toLowerCase();
   

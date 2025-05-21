@@ -84,8 +84,51 @@ const ReportDownload = ({ reportData, filename }: ReportProps) => {
       return detailedExplanation;
     };
 
+    // Extract sections from the detailed analysis if available
+    const parseDetailedAnalysis = () => {
+      const detailedAnalysis = reportData.aiAnalysis?.detailedAnalysis || '';
+      
+      // Initialize sections with default values
+      const sections = {
+        overallAssessment: 'No overall assessment provided',
+        specificIssues: 'No specific issues identified',
+        reasoning: 'No reasoning provided',
+        recommendations: 'No recommendations provided'
+      };
+      
+      // Try to extract each section from the detailed analysis
+      if (detailedAnalysis) {
+        // Match Overall Assessment section
+        const overallMatch = detailedAnalysis.match(/\*\*Overall Assessment\*\*:\s*([^*]*?)(?=\*\*|$)/is);
+        if (overallMatch && overallMatch[1].trim()) {
+          sections.overallAssessment = overallMatch[1].trim();
+        }
+        
+        // Match Specific Issues section
+        const issuesMatch = detailedAnalysis.match(/\*\*Specific Issues\*\*:\s*([^*]*?)(?=\*\*|$)/is);
+        if (issuesMatch && issuesMatch[1].trim()) {
+          sections.specificIssues = issuesMatch[1].trim();
+        }
+        
+        // Match Reasoning section
+        const reasoningMatch = detailedAnalysis.match(/\*\*Reasoning\*\*:\s*([^*]*?)(?=\*\*|$)/is);
+        if (reasoningMatch && reasoningMatch[1].trim()) {
+          sections.reasoning = reasoningMatch[1].trim();
+        }
+        
+        // Match Recommendations section
+        const recommendationsMatch = detailedAnalysis.match(/\*\*Recommendations\*\*:\s*([^*]*?)(?=\*\*|$)/is);
+        if (recommendationsMatch && recommendationsMatch[1].trim()) {
+          sections.recommendations = recommendationsMatch[1].trim();
+        }
+      }
+      
+      return sections;
+    };
+
     const detailedExplanation = generateDetailedExplanation();
     const confidencePercentage = ((reportData.aiAnalysis.confidence || 0) * 100).toFixed(1);
+    const analysisSection = parseDetailedAnalysis();
 
     const reportContent = `
 CONTENT MODERATION REPORT
@@ -109,6 +152,16 @@ Reason: ${reportData.aiAnalysis.reason || 'No reason provided'}
 
 DETAILED ANALYSIS:
 ----------------
+Overall Assessment: ${analysisSection.overallAssessment}
+
+Specific Issues: ${analysisSection.specificIssues}
+
+Reasoning: ${analysisSection.reasoning}
+
+Recommendations: ${analysisSection.recommendations}
+
+GENERAL EXPLANATION:
+-----------------
 ${detailedExplanation}
 
 RECOMMENDATIONS:
