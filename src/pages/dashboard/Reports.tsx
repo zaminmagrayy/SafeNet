@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
@@ -152,6 +151,9 @@ const ReportsPage = () => {
   
   const handleDeleteReport = async (reportId: string) => {
     try {
+      setIsLoading(true);
+      
+      // Delete the report from Supabase
       const { error } = await supabase
         .from('content_reports')
         .delete()
@@ -164,9 +166,17 @@ const ReportsPage = () => {
       // Remove report from local state to reflect deletion
       setReports(prevReports => prevReports.filter(report => report.id !== reportId));
       toast.success("Report deleted successfully");
+      
+      // If the deleted report was the selected one in the details dialog, close the dialog
+      if (selectedReport && selectedReport.id === reportId) {
+        setIsDetailsDialogOpen(false);
+        setSelectedReport(null);
+      }
     } catch (error) {
       console.error('Error deleting report:', error);
       toast.error('Failed to delete report');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -459,10 +469,22 @@ const ReportsPage = () => {
           <DialogFooter className="flex space-x-2">
             <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
             {selectedReport && (
-              <ReportDownload
-                reportData={selectedReport}
-                filename={`report-${selectedReport.id}`}
-              />
+              <>
+                <ReportDownload
+                  reportData={selectedReport}
+                  filename={`report-${selectedReport.id}`}
+                />
+                <Button 
+                  variant="destructive" 
+                  onClick={() => {
+                    handleDeleteReport(selectedReport.id);
+                    setIsDetailsDialogOpen(false);
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Report
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>
