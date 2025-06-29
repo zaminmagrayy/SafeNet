@@ -1,14 +1,14 @@
-Safe Net – AI-Powered Media Moderation Platform
+## Safe Net – AI-Powered Media Moderation Platform
 
 Safe Net is an intelligent, AI-driven web application designed to detect and prevent the spread of violent speech, threatening gestures, or graphic content across popular media platforms such as YouTube, Instagram, and Facebook. It ensures harmful content is flagged and blocked before it reaches the public.
 
-IMAGE
-![image alt]()
-![image alt]()
-![image alt]()
-![image alt]()
+## IMAGE
+![image alt](https://github.com/zaminmagrayy/SafeNet/blob/d572f2ba7eb4ba8e4c8b3651b3de8a1c425ac1d7/IMG_7623.jpg)
+![image alt](https://github.com/zaminmagrayy/SafeNet/blob/d572f2ba7eb4ba8e4c8b3651b3de8a1c425ac1d7/IMG_7624.jpg)
+![image alt](https://github.com/zaminmagrayy/SafeNet/blob/d572f2ba7eb4ba8e4c8b3651b3de8a1c425ac1d7/IMG_7625.jpg)
+![image alt](https://github.com/zaminmagrayy/SafeNet/blob/d572f2ba7eb4ba8e4c8b3651b3de8a1c425ac1d7/IMG_7626.jpg)
 
-Key Features
+## Key Features
 
 Real-time Content Moderation using Gemini 1.5 Flash API
 
